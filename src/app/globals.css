@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --background: #030303;
+  --foreground: #f3f4f6;
+  
+  --color-obsidian: #050508;
+  --color-surface: #0e0e13;
+  --color-surface-hover: #161622;
+  --color-neon-cyan: #00f3ff;
+  --color-neon-purple: #bd00ff;
+  --color-neon-pink: #ff007a;
+  
+  --font-sans: var(--font-geist-sans), system-ui;
+  --font-mono: var(--font-geist-mono), monospace;
+}
+
+@theme {
+  --color-obsidian: var(--color-obsidian);
+  --color-surface: var(--color-surface);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-neon-cyan: var(--color-neon-cyan);
+  --color-neon-purple: var(--color-neon-purple);
+  --color-neon-pink: var(--color-neon-pink);
+  
+  --shadow-neon-cyan: 0 0 15px rgba(0, 243, 255, 0.4);
+  --shadow-neon-purple: 0 0 15px rgba(189, 0, 255, 0.4);
+  --shadow-neon-pink: 0 0 15px rgba(255, 0, 122, 0.4);
+  
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-spin-slow: spin 20s linear infinite;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+.glass-panel {
+  background: rgba(14, 14, 19, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-neon {
+  background: rgba(14, 14, 19, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 243, 255, 0.15);
+  box-shadow: 0 0 25px rgba(0, 243, 255, 0.08);
+}
+
+.glass-panel-neon-purple {
+  background: rgba(14, 14, 19, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(189, 0, 255, 0.15);
+  box-shadow: 0 0 25px rgba(189, 0, 255, 0.08);
+}
+
+/* Custom scrollbar for dark tech aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #030303;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a1a24;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neon-cyan);
+}
+
+/* Glowing text and beat indicators */
+.text-glow-cyan {
+  text-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+}
+.text-glow-purple {
+  text-shadow: 0 0 8px rgba(189, 0, 255, 0.5);
+}
+.text-glow-pink {
+  text-shadow: 0 0 8px rgba(255, 0, 122, 0.5);
+}
+
+/* Jog wheel rotation animations */
+@keyframes spin-clockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-jog-spin {
+  animation: spin-clockwise 2s linear infinite;
+}
+
