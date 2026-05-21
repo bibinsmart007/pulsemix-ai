@@ -202,8 +202,8 @@ export default function Visualizer({ analyser, isPlaying }: VisualizerProps) {
 
       <div className="absolute top-4 right-6 pointer-events-none font-mono text-[9px] text-neutral-400 flex gap-4 z-10 select-none">
         <div className="flex items-center gap-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${isPlaying ? "bg-neon-pink animate-ping" : "bg-neutral-600"}`} />
-          <span>{isPlaying ? "ENGINE BROADCASTING" : "ENGINE SUSPENDED"}</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${isPlaying ? "bg-neon-pink animate-ping" : "bg-emerald-500"}`} />
+          <span>{isPlaying ? "ENGINE BROADCASTING" : "READY — LOAD TRACK"}</span>
         </div>
       </div>
     </div>

@@ -132,8 +132,14 @@ export default function DJDeck({
             className="w-full h-16 bg-black/60 border border-white/5 rounded-xl overflow-hidden relative"
           >
             {!state.trackLoaded && !state.loading && (
-              <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-600 font-mono select-none">
-                DROP AUDIO FILE HERE
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-900/40 select-none">
+                {/* Fake waveform SVG placeholder */}
+                <div className="w-full h-full absolute inset-0 opacity-20 flex items-center justify-center gap-[2px] px-2 overflow-hidden pointer-events-none">
+                  {Array.from({ length: 80 }).map((_, i) => (
+                    <div key={i} className="w-1 bg-neutral-500 rounded-full" style={{ height: `${20 + Math.random() * 60}%` }} />
+                  ))}
+                </div>
+                <span className="text-[10px] text-neutral-400 font-mono z-10 font-bold bg-black/60 px-3 py-1 rounded">DROP AUDIO FILE HERE</span>
               </div>
             )}
             
@@ -237,13 +243,17 @@ export default function DJDeck({
           <div className="grid grid-cols-4 gap-2 flex-1">
             {[0, 1, 2, 3].map(i => {
               const hasCue = state.hotCues && state.hotCues[i] !== null;
+              // Industry standard cue colors
+              const cueColors = ["bg-rose-500", "bg-blue-500", "bg-amber-500", "bg-emerald-500"];
+              const cueShadows = ["shadow-rose-500", "shadow-blue-500", "shadow-amber-500", "shadow-emerald-500"];
+              
               return (
                 <button
                   key={i}
                   onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
                   className={`rounded cursor-pointer font-mono text-[11px] font-bold transition-all shadow-inner h-full min-h-[36px] ${
                     hasCue 
-                      ? `${accentBg} text-black border border-white/20 brightness-110` 
+                      ? `${cueColors[i]} text-black border border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.5)] ${cueShadows[i]}` 
                       : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
                   }`}
                 >

@@ -312,17 +312,12 @@ export default function Home() {
       {/* Main Workspace Workspace */}
       <main className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(ellipse_at_top,rgba(14,14,19,0.35)_0%,rgba(3,3,5,1)_100%)] overflow-y-auto">
         {/* Top Control Bar HUD */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md z-10 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Sliders className="w-4 h-4 text-neon-cyan animate-pulse" />
             <span className="font-mono text-[10px] font-semibold text-neutral-400 tracking-wider">
               WORKSPACE: <span className="text-white uppercase font-bold text-glow-cyan">{engine.activeTab.replace("-", " ")}</span>
             </span>
-          </div>
-
-          {/* Moved Visualizer to global header to save space in central mixer */}
-          <div className="hidden lg:block flex-1 max-w-xl mx-8 h-8 opacity-70">
-            <Visualizer analyser={engine.analyserNode} isPlaying={engine.deckA.playing || engine.deckB.playing} />
           </div>
           
           {/* Quick HUD for playing tracks */}
@@ -339,16 +334,22 @@ export default function Home() {
         </header>
 
         {/* Dynamic Inner Tab Router Content */}
-        <div className="flex-1 p-8">
+        <div className="flex-1 flex flex-col p-6 overflow-hidden">
           
           {/* Tab 1: Mix Studio Panel */}
           {engine.activeTab === "studio" && (
-            <div className="h-full flex flex-col">
-              {/* Core studio grid: 3 Columns on large screens */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full items-stretch pb-6">
+            <div className="h-full flex flex-col gap-6">
+              
+              {/* Full-width FFT Spectrum Analyser Panel */}
+              <div className="w-full h-20 flex-shrink-0">
+                <Visualizer analyser={engine.analyserNode} isPlaying={engine.deckA.playing || engine.deckB.playing} />
+              </div>
+
+              {/* Core studio grid: Side-by-Side Decks with Central Mixer */}
+              <div className="flex-1 min-h-0 grid gap-6" style={{ gridTemplateColumns: '1fr 340px 1fr' }}>
                 
                 {/* Left Side: Deck A */}
-                <div className="xl:col-span-4 min-w-0 flex flex-col h-full">
+                <div className="min-w-0 flex flex-col h-full overflow-y-auto">
                   <DJDeck 
                     deckId="A" 
                     state={engine.deckA}
@@ -370,7 +371,7 @@ export default function Home() {
                 </div>
 
                 {/* Central Column: Master Mixer Desk (Contains EQ strips for both channels) */}
-                <div className="xl:col-span-4 flex flex-col h-full">
+                <div className="flex flex-col h-full overflow-y-auto">
                   <MixerDesk 
                     stateA={engine.deckA}
                     stateB={engine.deckB}
@@ -392,7 +393,7 @@ export default function Home() {
                 </div>
 
                 {/* Right Side: Deck B */}
-                <div className="xl:col-span-4 min-w-0 flex flex-col h-full">
+                <div className="min-w-0 flex flex-col h-full overflow-y-auto">
                   <DJDeck 
                     deckId="B" 
                     state={engine.deckB}

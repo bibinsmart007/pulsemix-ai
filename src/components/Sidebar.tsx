@@ -76,24 +76,24 @@ export default function Sidebar({ activeTab, setActiveTab, isTransitioning }: Si
       </nav>
 
       {/* System Status Footer */}
-      <div className="p-6 border-t border-white/5 bg-black/40 font-mono text-[10px] text-neutral-500 space-y-2">
-        <div className="flex items-center justify-between">
-          <span>WEB AUDIO API</span>
-          <span className="text-emerald-500 flex items-center gap-1.5">
+      <div className="p-6 border-t border-white/5 bg-black/40 font-mono text-[9px] text-neutral-500 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate">WEB AUDIO</span>
+          <span className="text-emerald-500 flex items-center gap-1.5 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             ONLINE
           </span>
         </div>
-        <div className="flex items-center justify-between">
-          <span>FASTAPI BACKEND</span>
-          <span className="text-neon-cyan flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate">FASTAPI</span>
+          <span className="text-neon-cyan flex items-center gap-1.5 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan animate-pulse" />
             READY
           </span>
         </div>
-        <div className="flex items-center justify-between">
-          <span>LATENCY SPEED</span>
-          <span className="text-neutral-400">~2.4 ms</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate">LATENCY</span>
+          <span className="text-neutral-400 shrink-0">~2.4 ms</span>
         </div>
       </div>
     </aside>

@@ -147,10 +147,19 @@ export default function MixerDesk({
     <div className="glass-panel rounded-3xl p-6 border border-white/5 flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
       
       {/* Top Header: Master Vol & FX */}
-      <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-2xl gap-4">
+      <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-2xl gap-4 relative">
+        
         {/* Master Volume */}
         <div className="flex-1 flex flex-col gap-1.5">
-          <span className="font-mono text-[9px] text-neutral-400 flex items-center gap-1"><Volume2 className="w-3 h-3" /> MASTER</span>
+          <div className="flex justify-between items-center">
+            <span className="font-mono text-[9px] text-neutral-400 flex items-center gap-1"><Volume2 className="w-3 h-3" /> MASTER</span>
+            {/* BPM Sync Indicator */}
+            {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
+              <span className="text-[8px] font-mono font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
+                BPM SYNCED
+              </span>
+            )}
+          </div>
           <input
             type="range"
             min="0"
@@ -165,6 +174,7 @@ export default function MixerDesk({
         {/* FX Toggles */}
         <div className="flex gap-2">
           <button
+            title="Echo Delay Effect (Tail)"
             onClick={() => onToggleFX("delay", !delayActive)}
             className={`px-3 py-1.5 rounded-lg text-[9px] font-mono transition-all ${
               delayActive ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
@@ -173,6 +183,7 @@ export default function MixerDesk({
             ECHO
           </button>
           <button
+            title="Room Reverb Effect"
             onClick={() => onToggleFX("reverb", !reverbActive)}
             className={`px-3 py-1.5 rounded-lg text-[9px] font-mono transition-all ${
               reverbActive ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
@@ -213,11 +224,17 @@ export default function MixerDesk({
           {transitionPresets.map((preset) => (
             <button
               key={preset.id}
+              title={preset.desc}
               onClick={() => onTriggerTransition(preset.id, 8)}
               disabled={isTransitioning}
-              className="p-2 rounded-lg bg-neutral-900/60 border border-white/5 hover:bg-neutral-800 text-left transition-colors disabled:opacity-50 group flex flex-col gap-1"
+              className={`p-2 rounded-lg border text-left transition-all flex flex-col gap-0.5 ${
+                isTransitioning 
+                  ? "bg-neutral-900 border-white/5 opacity-40 cursor-not-allowed" 
+                  : "bg-neutral-900/60 border-white/10 hover:border-white/30 hover:bg-neutral-800"
+              }`}
             >
-              <span className="text-[9px] font-mono text-white group-hover:text-neon-cyan">{preset.label}</span>
+              <span className="text-[9px] font-mono text-white font-bold">{preset.label}</span>
+              <span className="text-[7px] font-mono text-neutral-500">{preset.desc}</span>
             </button>
           ))}
         </div>
@@ -241,11 +258,19 @@ export default function MixerDesk({
       {/* Crossfader */}
       <div className="space-y-2 pb-2">
         <div className="flex justify-between text-[9px] font-mono text-neutral-500">
-          <span>A</span>
+          <span className={crossfader < 0 ? "text-neon-cyan font-bold" : ""}>A</span>
           <span>CROSSFADER</span>
-          <span>B</span>
+          <span className={crossfader > 0 ? "text-neon-purple font-bold" : ""}>B</span>
         </div>
-        <div className="relative py-2 px-3 bg-black/60 border border-white/5 rounded-xl">
+        <div className="relative py-2 px-3 bg-black/60 border border-white/5 rounded-xl overflow-hidden">
+          {/* Dynamic Background Gradient Indicator */}
+          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{
+            background: crossfader < 0 
+              ? `linear-gradient(to right, #00f3ff ${Math.abs(crossfader)}%, transparent 50%)`
+              : crossfader > 0 
+                ? `linear-gradient(to left, #bd00ff ${crossfader}%, transparent 50%)`
+                : 'transparent'
+          }} />
           <div className="absolute inset-x-8 h-0.5 bg-neutral-800 pointer-events-none rounded top-1/2 -translate-y-1/2" />
           <input
             type="range"
@@ -253,7 +278,9 @@ export default function MixerDesk({
             max="100"
             value={crossfader}
             onChange={(e) => setCrossfader(parseInt(e.target.value))}
-            className="w-full accent-white bg-transparent h-2 rounded appearance-none cursor-pointer outline-none relative z-10"
+            className={`w-full bg-transparent h-2 rounded appearance-none cursor-pointer outline-none relative z-10 ${
+              crossfader < -10 ? 'accent-neon-cyan' : crossfader > 10 ? 'accent-neon-purple' : 'accent-neutral-400'
+            }`}
           />
         </div>
       </div>
