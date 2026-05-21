@@ -109,22 +109,9 @@ def analyze_audio(filepath: str) -> dict:
         }
         
     except Exception as e:
-        print(f"[Analyzer] Librosa analysis failed or not installed ({str(e)}). Using robust analytical fallback.")
-        
-        # Deterministic analysis based on hashing the filename to keep it stable
-        h = sum(ord(c) for c in filename)
-        
-        # Generate stable BPMs between 120 and 130
-        bpm = 120 + (h % 11)
-        
-        # Camelot keys list
-        keys = ["8A", "9A", "7A", "8B", "9B", "10A", "11A", "5A", "6A", "3A", "12A"]
-        key = keys[h % len(keys)]
+        print(f"[Analyzer] Librosa analysis failed or not installed ({str(e)}).")
         
         return {
-            "bpm": float(bpm),
-            "key": key,
-            "key_name": key,
             "success": False,
             "error": str(e)
         }

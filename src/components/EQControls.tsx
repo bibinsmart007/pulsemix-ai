@@ -2,7 +2,7 @@
 
 import React from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { DeckState } from "@/hooks/useAudioEngine";
+import { DeckState } from "@/types/audio";
 
 interface EQControlsProps {
   deckId: "A" | "B";

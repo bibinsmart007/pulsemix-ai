@@ -62,7 +62,7 @@ export default function Home() {
 
   // Initialize and update Wavesurfer instance A
   useEffect(() => {
-    if (typeof window === "undefined" || !engine.deckA.audioBuffer) return;
+    if (typeof window === "undefined" || !engine.deckA.trackLoaded || !engine.audioElemA) return;
 
     let wsA: any = null;
     const container = document.querySelector("#waveform-A");
@@ -71,6 +71,7 @@ export default function Home() {
       import("wavesurfer.js").then((WaveSurfer) => {
         wsA = WaveSurfer.default.create({
           container: "#waveform-A",
+          media: engine.audioElemA as HTMLAudioElement,
           waveColor: "rgba(0, 243, 255, 0.15)",
           progressColor: "rgba(0, 243, 255, 0.8)",
           cursorColor: "#00f3ff",
@@ -81,9 +82,6 @@ export default function Home() {
           interact: false,
         });
         
-        wsA.load(engine.deckA.thumbnail ? engine.deckA.thumbnail : "/music/titanium_beats.mp3"); // Use preloaded blob if URL is needed
-        // Since we play buffer source, draw peaks using the buffer
-        wsA.loadDecodedBuffer(engine.deckA.audioBuffer);
         wavesurferARef.current = wsA;
       });
     }
@@ -91,11 +89,11 @@ export default function Home() {
     return () => {
       if (wsA) wsA.destroy();
     };
-  }, [engine.deckA.audioBuffer]);
+  }, [engine.deckA.trackLoaded, engine.audioElemA]);
 
   // Initialize and update Wavesurfer instance B
   useEffect(() => {
-    if (typeof window === "undefined" || !engine.deckB.audioBuffer) return;
+    if (typeof window === "undefined" || !engine.deckB.trackLoaded || !engine.audioElemB) return;
 
     let wsB: any = null;
     const container = document.querySelector("#waveform-B");
@@ -104,6 +102,7 @@ export default function Home() {
       import("wavesurfer.js").then((WaveSurfer) => {
         wsB = WaveSurfer.default.create({
           container: "#waveform-B",
+          media: engine.audioElemB as HTMLAudioElement,
           waveColor: "rgba(189, 0, 255, 0.15)",
           progressColor: "rgba(189, 0, 255, 0.8)",
           cursorColor: "#bd00ff",
@@ -114,7 +113,6 @@ export default function Home() {
           interact: false,
         });
         
-        wsB.loadDecodedBuffer(engine.deckB.audioBuffer);
         wavesurferBRef.current = wsB;
       });
     }
@@ -122,21 +120,11 @@ export default function Home() {
     return () => {
       if (wsB) wsB.destroy();
     };
-  }, [engine.deckB.audioBuffer]);
+  }, [engine.deckB.trackLoaded, engine.audioElemB]);
 
-  // Sync Wavesurfer playhead indicators
-  useEffect(() => {
-    if (wavesurferARef.current && engine.deckA.playing) {
-      wavesurferARef.current.setTime(engine.deckA.currentTime);
-    }
-  }, [engine.deckA.currentTime]);
-
-  useEffect(() => {
-    if (wavesurferBRef.current && engine.deckB.playing) {
-      wavesurferBRef.current.setTime(engine.deckB.currentTime);
-    }
-  }, [engine.deckB.currentTime]);
-
+  // Note: Wavesurfer auto-syncs with the HTMLAudioElement passed via the `media` config.
+  // We don't need manual sync loops anymore!
+  
   // YouTube Audio Import handler
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,16 +153,47 @@ export default function Home() {
       if (!response.ok) throw new Error("Backend server offline or URL extraction failed");
       const data = await response.json();
 
-      if (data.success && data.track) {
-        // Update queue
-        setImportQueue(prev => prev.map(item => 
-          item.url === youtubeUrl || item.id === newQueueItem.id
-            ? { ...item, ...data.track, status: "completed" }
-            : item
-        ));
+      if (data.success && data.job_id) {
+        // Poll for job status
+        const jobId = data.job_id;
         
-        // Add to imported list
-        setPresetTracks(prev => [data.track, ...prev]);
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await fetch(`http://127.0.0.1:8000/api/status/${jobId}`);
+            if (!statusRes.ok) throw new Error("Status check failed");
+            
+            const statusData = await statusRes.json();
+            
+            if (statusData.status === "completed" && statusData.track) {
+              clearInterval(pollInterval);
+              // Update queue
+              setImportQueue(prev => prev.map(item => 
+                item.url === youtubeUrl || item.id === newQueueItem.id
+                  ? { ...item, ...statusData.track, status: "completed", title: statusData.track.title }
+                  : item
+              ));
+              
+              // Add to imported list
+              setPresetTracks(prev => [statusData.track, ...prev]);
+            } else if (statusData.status === "failed") {
+              clearInterval(pollInterval);
+              throw new Error(statusData.error || "Async extraction failed");
+            } else if (statusData.status === "downloading" || statusData.status === "analyzing") {
+              // Optionally update UI to show progress
+              setImportQueue(prev => prev.map(item => 
+                item.id === newQueueItem.id
+                  ? { ...item, title: `Status: ${statusData.status}...` }
+                  : item
+              ));
+            }
+          } catch (e) {
+             clearInterval(pollInterval);
+             console.warn("[Client] Polling failed", e);
+             throw e; // Triggers fallback block
+          }
+        }, 2000);
+      } else {
+        throw new Error("No job_id returned");
       }
     } catch (err) {
       console.warn("[Client] YouTube backend resolve failed. Simulating intelligent fallback extraction.", err);
@@ -214,56 +233,11 @@ export default function Home() {
     }
   };
 
-  // Perform client-side Offline audio set rendering
-  const handleOfflineExport = async () => {
-    if (!engine.deckA.audioBuffer && !engine.deckB.audioBuffer) return;
-    
-    setRenderStatus("rendering");
-    setRenderProgress(10);
-    
-    // Animate rendering progress to simulate processing stages
-    const interval = setInterval(() => {
-      setRenderProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return prev + 15;
-      });
-    }, 400);
 
-    try {
-      // Execute 30-second mix rendering
-      const mixWavBlob = await engine.renderMixOffline(30);
-      
-      clearInterval(interval);
-      setRenderProgress(100);
-      
-      const fileUrl = URL.createObjectURL(mixWavBlob);
-      setExportedFileUrl(fileUrl);
-      setRenderStatus("finished");
-      
-      // Add exported track to session history
-      const savedHistory = JSON.parse(localStorage.getItem("pulsemix_history") || "[]");
-      savedHistory.unshift({
-        title: customMixTitle,
-        timestamp: new Date().toLocaleTimeString(),
-        duration: "00:30.0",
-        bpm: engine.deckA.bpm.toFixed(0),
-        url: fileUrl
-      });
-      localStorage.setItem("pulsemix_history", JSON.stringify(savedHistory));
-
-    } catch (err) {
-      console.error("[Render] Offline compilation error:", err);
-      setRenderStatus("idle");
-      clearInterval(interval);
-    }
-  };
 
   // Automated Mashup constructor (AI Remix Lab helper)
   const handleAutoMashup = (style: "vocals-swap" | "hook-clash" | "drum-groove") => {
-    if (!engine.deckA.audioBuffer || !engine.deckB.audioBuffer) return;
+    if (!engine.deckA.trackLoaded || !engine.deckB.trackLoaded) return;
     
     if (style === "vocals-swap") {
       // Mute Deck A instruments (melody/drums), play only vocals
@@ -381,6 +355,13 @@ export default function Home() {
                       onPitchChange={(pitch) => engine.updatePitch("A", pitch)}
                       onSync={() => engine.syncDecks("B")}
                       onVinylStop={() => engine.triggerVinylStop("A")}
+                      onSetHotCue={(i, t) => engine.setHotCue("A", i, t)}
+                      onTriggerHotCue={(i) => engine.triggerHotCue("A", i)}
+                      onToggleLoop={(bars) => engine.toggleLoop("A", bars)}
+                      onFileDrop={(file) => {
+                        const url = URL.createObjectURL(file);
+                        engine.loadTrack("A", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
+                      }}
                     />
                   </div>
                   <EQControls 
@@ -423,6 +404,13 @@ export default function Home() {
                       onPitchChange={(pitch) => engine.updatePitch("B", pitch)}
                       onSync={() => engine.syncDecks("A")}
                       onVinylStop={() => engine.triggerVinylStop("B")}
+                      onSetHotCue={(i, t) => engine.setHotCue("B", i, t)}
+                      onTriggerHotCue={(i) => engine.triggerHotCue("B", i)}
+                      onToggleLoop={(bars) => engine.toggleLoop("B", bars)}
+                      onFileDrop={(file) => {
+                        const url = URL.createObjectURL(file);
+                        engine.loadTrack("B", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
+                      }}
                     />
                   </div>
                   <EQControls 
@@ -443,7 +431,7 @@ export default function Home() {
             <div className="space-y-6">
               <div className="glass-panel rounded-3xl p-6 border border-white/5 space-y-4">
                 <h2 className="text-lg font-bold tracking-wider font-mono text-neon-cyan flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-neon-cyan animate-pulse" /> AI STEM SEPARATION WORKSTATION
+                  <Sparkles className="w-5 h-5 text-neon-cyan animate-pulse" /> 3-BAND EQ ISOLATOR WORKSTATION
                 </h2>
                 <p className="text-xs text-neutral-400 leading-relaxed">
                   PulseMix AI incorporates a real-time Web Audio crossover network filter. Mute, boost, or isolate frequencies dynamically to blend elements of both tracks into a clean, professional beatmatched live mashup.
@@ -457,7 +445,7 @@ export default function Home() {
                   <div className="flex items-center justify-between border-b border-white/5 pb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-neon-cyan animate-pulse" />
-                      <span className="font-bold text-sm tracking-wider font-mono">STEMS: DECK A</span>
+                      <span className="font-bold text-sm tracking-wider font-mono">ISOLATOR: DECK A</span>
                     </div>
                     <span className="font-mono text-[10px] text-neutral-500 truncate max-w-[200px]">{engine.deckA.title}</span>
                   </div>
@@ -558,7 +546,7 @@ export default function Home() {
                   <div className="flex items-center justify-between border-b border-white/5 pb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-neon-purple animate-pulse" />
-                      <span className="font-bold text-sm tracking-wider font-mono">STEMS: DECK B</span>
+                      <span className="font-bold text-sm tracking-wider font-mono">ISOLATOR: DECK B</span>
                     </div>
                     <span className="font-mono text-[10px] text-neutral-500 truncate max-w-[200px]">{engine.deckB.title}</span>
                   </div>
@@ -791,7 +779,7 @@ export default function Home() {
                           <span className="font-bold text-white bg-white/5 px-2 py-0.5 rounded border border-white/5">{track.key}</span>
                         </div>
                         {/* Harmonic Match HUD */}
-                        {engine.deckA.audioBuffer && (
+                        {engine.deckA.trackLoaded && (
                           <span className={`px-2 py-0.5 rounded border text-[8px] font-bold ${getCompatibilityColor(track.key, engine.deckA.key)}`}>
                             {track.key === engine.deckA.key ? "PERFECT KEY MATCH" : getCompatibleKeys(engine.deckA.key).includes(track.key) ? "HARMONIC MATCH" : "COMPATIBLE"}
                           </span>
@@ -821,106 +809,7 @@ export default function Home() {
           )}
 
           {/* Tab 4: Export Center Panel */}
-          {engine.activeTab === "export" && (
-            <div className="max-w-2xl mx-auto space-y-8 py-4">
-              <div className="glass-panel rounded-3xl p-8 border border-white/5 space-y-6 text-center shadow-xl">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-neon-purple to-neon-cyan flex items-center justify-center mx-auto shadow-lg shadow-neon-cyan/10">
-                  <Download className="w-8 h-8 text-black" />
-                </div>
-                
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold tracking-wider font-mono text-white">COMPILE & EXPORT DJ REMIX SET</h2>
-                  <p className="text-xs text-neutral-400 leading-relaxed max-w-md mx-auto">
-                    Render your custom beatmatched transitions, automated crossfades, EQ carve-ups, and stem separations in a lossless CD-quality audio stream directly in the browser.
-                  </p>
-                </div>
 
-                {/* Form fields */}
-                <div className="text-left space-y-4 max-w-md mx-auto font-mono">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider">MIX TITLE</label>
-                    <input 
-                      type="text"
-                      value={customMixTitle}
-                      onChange={(e) => setCustomMixTitle(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-semibold outline-none focus:border-neon-cyan/50"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-black/40 border border-white/5 p-4 rounded-2xl text-center space-y-1">
-                      <span className="text-[9px] text-neutral-500 font-bold uppercase">EXPORT QUALITY</span>
-                      <p className="text-xs text-glow-cyan text-neon-cyan font-bold">16-BIT WAV LOSSLESS</p>
-                    </div>
-                    <div className="bg-black/40 border border-white/5 p-4 rounded-2xl text-center space-y-1">
-                      <span className="text-[9px] text-neutral-500 font-bold uppercase">SAMPLE RATE</span>
-                      <p className="text-xs text-glow-purple text-neon-purple font-bold">44.1 kHz STEREO</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Trigger Export Button */}
-                <div className="pt-4 max-w-md mx-auto">
-                  {renderStatus === "idle" && (
-                    <button
-                      onClick={handleOfflineExport}
-                      disabled={!engine.deckA.audioBuffer && !engine.deckB.audioBuffer}
-                      className="w-full bg-gradient-to-r from-neon-cyan to-neon-purple text-black font-extrabold py-4 px-6 rounded-2xl hover:brightness-110 active:scale-95 transition-all text-xs font-mono tracking-wider shadow-lg shadow-neon-cyan/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      GENERATE HIGH-SPEED MIX EXPORT
-                    </button>
-                  )}
-
-                  {renderStatus === "rendering" && (
-                    <div className="space-y-4 py-2 font-mono">
-                      <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-                        {/* Circle spinner */}
-                        <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="40" cy="40" r="34" className="stroke-neutral-800" strokeWidth="6" fill="transparent" />
-                          <circle cx="40" cy="40" r="34" className="stroke-neon-cyan" strokeWidth="6" fill="transparent" 
-                            strokeDasharray={2 * Math.PI * 34}
-                            strokeDashoffset={2 * Math.PI * 34 * (1 - renderProgress / 100)}
-                            strokeLinecap="round"
-                            style={{ transition: 'stroke-dashoffset 0.4s' }}
-                          />
-                        </svg>
-                        <span className="absolute text-xs font-bold text-white">{renderProgress}%</span>
-                      </div>
-                      <p className="text-[10px] text-neon-cyan animate-pulse tracking-widest font-bold">OFFLINE AUDIO CONTEXT COMPILING...</p>
-                    </div>
-                  )}
-
-                  {renderStatus === "finished" && (
-                    <div className="space-y-4">
-                      <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center gap-3 font-mono text-left max-w-md mx-auto">
-                        <FileCheck className="w-10 h-10 text-emerald-400" />
-                        <div>
-                          <p className="text-xs font-bold text-white">EXPORT SUCCESSFUL!</p>
-                          <p className="text-[10px] text-neutral-500 font-semibold leading-normal">WAV file successfully rendered in-browser at 18x real-time speed.</p>
-                        </div>
-                      </div>
-
-                      <a
-                        href={exportedFileUrl}
-                        download={`${customMixTitle.toLowerCase().replace(/ /g, "_")}.wav`}
-                        className="w-full bg-emerald-500 text-black font-extrabold py-4 px-6 rounded-2xl hover:brightness-110 active:scale-95 transition-all text-xs font-mono tracking-wider shadow-lg shadow-emerald-500/20 cursor-pointer block text-center"
-                      >
-                        DOWNLOAD Lossless WAV File
-                      </a>
-
-                      <button
-                        onClick={() => { setRenderStatus("idle"); setExportedFileUrl(""); }}
-                        className="text-[10px] font-mono font-bold text-neutral-500 hover:text-white underline"
-                      >
-                        RENDER ANOTHER TRANSITION MIX
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
-          )}
 
           {/* Tab 5: History & Presets Panel */}
           {engine.activeTab === "history" && (

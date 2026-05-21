@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Play, Pause, RotateCcw, Zap, Disc } from "lucide-react";
-import { DeckState } from "@/hooks/useAudioEngine";
+import { DeckState } from "@/types/audio";
 
 interface DJDeckProps {
   deckId: "A" | "B";
@@ -14,6 +14,10 @@ interface DJDeckProps {
   onPitchChange: (pitch: number) => void;
   onSync: () => void;
   onVinylStop: () => void;
+  onSetHotCue: (index: number, time: number) => void;
+  onTriggerHotCue: (index: number) => void;
+  onToggleLoop: (bars: number) => void;
+  onFileDrop: (file: File) => void;
 }
 
 export default function DJDeck({
@@ -26,7 +30,12 @@ export default function DJDeck({
   onPitchChange,
   onSync,
   onVinylStop,
+  onSetHotCue,
+  onTriggerHotCue,
+  onToggleLoop,
+  onFileDrop,
 }: DJDeckProps) {
+  const [isDragging, setIsDragging] = React.useState(false);
   const isA = deckId === "A";
   const accentColor = isA ? "text-neon-cyan" : "text-neon-purple";
   const borderColor = isA ? "border-neon-cyan/20" : "border-neon-purple/20";
@@ -53,8 +62,36 @@ export default function DJDeck({
     onSeek(val);
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onFileDrop(e.dataTransfer.files[0]);
+    }
+  };
+
   return (
-    <div className={`glass-panel rounded-3xl p-6 ${shadowColor} shadow-xl border border-white/5 flex flex-col gap-6 relative transition-all duration-300 ${glowBorderClass}`}>
+    <div 
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`glass-panel rounded-3xl p-6 ${shadowColor} shadow-xl border ${isDragging ? 'border-neon-pink bg-neon-pink/5 scale-[1.02]' : 'border-white/5'} flex flex-col gap-6 relative transition-all duration-300 ${glowBorderClass}`}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-3xl border-2 border-dashed border-neon-pink">
+          <p className="font-mono text-neon-pink font-bold text-xl tracking-widest pointer-events-none">DROP FILE TO LOAD TO DECK {deckId}</p>
+        </div>
+      )}
       {/* Glow corner highlights */}
       <div className={`absolute top-0 ${isA ? 'left-6' : 'right-6'} w-24 h-[1px] bg-gradient-to-r from-transparent via-${isA ? 'neon-cyan' : 'neon-purple'}/50 to-transparent`} />
 
@@ -168,6 +205,56 @@ export default function DJDeck({
         </div>
       </div>
 
+      {/* 100x Upgrade: Hot Cues & Loops */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Hot Cues (4 pads) */}
+        <div className="bg-black/40 rounded-xl p-2 border border-white/5 space-y-2">
+          <div className="text-[9px] font-mono text-neutral-500 font-bold px-1 flex justify-between">
+            <span>HOT CUES</span>
+            <span className="text-neutral-600">SET / JUMP</span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[0, 1, 2, 3].map(i => {
+              const hasCue = state.hotCues && state.hotCues[i] !== null;
+              return (
+                <button
+                  key={i}
+                  onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
+                  className={`h-8 rounded cursor-pointer font-mono text-[10px] font-bold transition-all shadow-[inset_0_-2px_4px_rgba(0,0,0,0.6)] ${
+                    hasCue 
+                      ? `${accentBg} text-black border border-white/20 shadow-${isA ? 'neon-cyan' : 'neon-purple'}/50 brightness-110` 
+                      : 'bg-neutral-800 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Auto Loop */}
+        <div className="bg-black/40 rounded-xl p-2 border border-white/5 space-y-2 flex flex-col justify-between">
+          <div className="text-[9px] font-mono text-neutral-500 font-bold px-1 flex justify-between">
+            <span>AUTO LOOP</span>
+            <span className="text-neutral-600">{state.loopActive ? "ACTIVE" : "OFF"}</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onToggleLoop(4)}
+              className={`flex-1 h-8 rounded cursor-pointer font-mono text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                state.loopActive 
+                  ? 'bg-amber-500 text-black border border-amber-300 shadow-amber-500/50 shadow-md animate-pulse' 
+                  : 'bg-neutral-800 text-neutral-400 border border-neutral-700/50 hover:bg-neutral-700'
+              }`}
+            >
+              <RotateCcw className="w-3 h-3" />
+              4 BARS
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Waveform Visualization Slot */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono">
@@ -183,7 +270,7 @@ export default function DJDeck({
             className="w-full h-12 bg-black/60 border border-white/5 rounded-xl overflow-hidden relative"
           >
             {/* Decorative placeholder visual grid before audio loads */}
-            {!state.audioBuffer && !state.loading && (
+            {!state.trackLoaded && !state.loading && (
               <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-600 font-mono select-none">
                 PASTE A LINK OR LOAD A DEMO SONG TO GENERATE WAVEFORM
               </div>
@@ -198,7 +285,7 @@ export default function DJDeck({
           </div>
 
           {/* Simple seek overlay bar */}
-          {state.audioBuffer && !state.loading && (
+          {state.trackLoaded && !state.loading && (
             <input 
               type="range"
               min="0"
@@ -217,7 +304,7 @@ export default function DJDeck({
         {/* Cue point button */}
         <button 
           onClick={() => onSeek(0)}
-          disabled={!state.audioBuffer}
+          disabled={!state.trackLoaded}
           className={`py-3.5 rounded-xl border border-white/5 bg-neutral-900/60 hover:bg-neutral-800 text-xs font-mono font-bold tracking-widest text-neutral-300 shadow active:scale-95 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <RotateCcw className="w-3.5 h-3.5" />
@@ -227,7 +314,7 @@ export default function DJDeck({
         {/* Play/Pause Button */}
         <button
           onClick={state.playing ? onPause : onPlay}
-          disabled={!state.audioBuffer || state.loading}
+          disabled={!state.trackLoaded || state.loading}
           className={`col-span-2 py-3.5 rounded-xl border flex items-center justify-center gap-2 text-sm font-bold tracking-widest cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all shadow-md ${
             state.playing
               ? `bg-black/40 border-${isA ? 'neon-cyan' : 'neon-purple'}/50 text-white shadow-${isA ? 'neon-cyan' : 'neon-purple'}/10`

@@ -2,6 +2,7 @@ import os
 import re
 import random
 import yt_dlp
+import urllib.parse
 
 # Canned mock tracks matching requested genres for fast offline fallback testing
 MOCK_TRACKS = [
@@ -79,9 +80,22 @@ def get_fallback_track(url_or_query: str) -> dict:
 
 def clean_youtube_url(url: str) -> str:
     """Extract clean video ID to prevent command injection or formatting errors."""
-    video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
-    if video_id_match:
-        return f"https://www.youtube.com/watch?v={video_id_match.group(1)}"
+    try:
+        parsed = urllib.parse.urlparse(url)
+        # Check hostname
+        if parsed.hostname in ('www.youtube.com', 'youtube.com'):
+            query = urllib.parse.parse_qs(parsed.query)
+            video_id = query.get('v', [None])[0]
+        elif parsed.hostname == 'youtu.be':
+            video_id = parsed.path.lstrip('/')
+        else:
+            video_id = None
+            
+        if video_id and re.match(r'^[0-9A-Za-z_-]{11}$', video_id):
+            return f"https://www.youtube.com/watch?v={video_id}"
+            
+    except Exception:
+        pass
     return url
 
 def resolve_youtube_audio(youtube_url: str, output_dir: str) -> dict:

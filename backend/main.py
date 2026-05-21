@@ -16,10 +16,10 @@ app = FastAPI(
     version="1.0"
 )
 
-# Enable CORS for Next.js dev server
+# Enable CORS for Next.js dev server securely
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this. For local development, allow all.
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,6 +42,33 @@ try:
 except Exception as e:
     print(f"[Backend] Failed to run preset loop synthesizer: {e}")
 
+# In-memory Job Queue for Background Processing
+import uuid
+import time
+import threading
+from fastapi import BackgroundTasks
+
+jobs = {}
+
+def cleanup_old_files():
+    """Background thread to delete downloaded files older than 60 minutes."""
+    while True:
+        try:
+            now = time.time()
+            for filename in os.listdir(DOWNLOADS_DIR):
+                filepath = os.path.join(DOWNLOADS_DIR, filename)
+                if os.path.isfile(filepath):
+                    file_age = now - os.path.getmtime(filepath)
+                    if file_age > 3600: # 60 minutes
+                        os.remove(filepath)
+                        print(f"[Cleanup] Deleted old file: {filename}")
+        except Exception as e:
+            print(f"[Cleanup] Error during cleanup: {e}")
+        time.sleep(1800) # Sleep for 30 minutes
+
+cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
+cleanup_thread.start()
+
 class ImportRequest(BaseModel):
     url: str
 
@@ -57,30 +84,20 @@ def read_root():
         }
     }
 
-@app.post("/api/import")
-def import_track(req: ImportRequest):
-    """
-    Endpoint to paste a YouTube link, download it, and automatically
-    detect its BPM and Camelot key using the audio analyzer.
-    """
-    if not req.url or len(req.url.strip()) == 0:
-        raise HTTPException(status_code=400, detail="YouTube URL cannot be empty")
+def process_audio_job(job_id: str, url: str):
+    """Background worker to download and analyze audio asynchronously."""
+    try:
+        jobs[job_id]["status"] = "downloading"
+        extraction = resolve_youtube_audio(url, DOWNLOADS_DIR)
         
-    print(f"[Backend] Received import request for URL: {req.url}")
-    
-    # 1. Download/extract raw audio stream
-    extraction = resolve_youtube_audio(req.url, DOWNLOADS_DIR)
-    
-    # 2. If it's a real download and not a mock, perform deep librosa analysis
-    # Mock files are already pre-analyzed in extractor.py
-    if not extraction["id"].startswith("mock_"):
-        analysis = analyze_audio(extraction["filepath"])
-        extraction["bpm"] = analysis["bpm"]
-        extraction["key"] = analysis["key"]
-        
-    return {
-        "success": True,
-        "track": {
+        jobs[job_id]["status"] = "analyzing"
+        if not extraction["id"].startswith("mock_"):
+            analysis = analyze_audio(extraction["filepath"])
+            extraction["bpm"] = analysis["bpm"]
+            extraction["key"] = analysis["key"]
+            
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["track"] = {
             "id": extraction["id"],
             "title": extraction["title"],
             "duration": extraction["duration"],
@@ -90,7 +107,39 @@ def import_track(req: ImportRequest):
             "key": extraction["key"],
             "genre": extraction.get("genre", "Imported")
         }
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+
+
+@app.post("/api/import")
+def import_track(req: ImportRequest, bg_tasks: BackgroundTasks):
+    """
+    Endpoint to trigger async download and analysis of a YouTube track.
+    Returns a job_id instantly for the client to poll.
+    """
+    if not req.url or len(req.url.strip()) == 0:
+        raise HTTPException(status_code=400, detail="YouTube URL cannot be empty")
+        
+    print(f"[Backend] Received async import request for URL: {req.url}")
+    
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "pending"}
+    
+    bg_tasks.add_task(process_audio_job, job_id, req.url)
+    
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "pending"
     }
+
+@app.get("/api/status/{job_id}")
+def get_job_status(job_id: str):
+    """Polling endpoint for track import status."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return jobs[job_id]
 
 @app.get("/api/inventory")
 def get_inventory():

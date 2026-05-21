@@ -110,40 +110,60 @@ export default function Visualizer({ analyser, isPlaying }: VisualizerProps) {
         ctx.fill();
       });
 
-      // 3. Draw Mirrored Spectrometer Bars (Neon Cyan and Neon Purple)
-      const barWidth = (width / (bufferLength * 0.75)) * 1.4;
-      let barHeight;
-      let x = 0;
-
-      // Draw center-outward mirror bars
-      const numBars = Math.floor(bufferLength * 0.62); // limit to audible spectrum
+      // 3. Draw 3D Circular Visualizer
+      ctx.save();
+      ctx.translate(width / 2, height / 2); // Center the canvas
+      
+      const radius = Math.min(width, height) * 0.25;
+      const numBars = Math.floor(bufferLength * 0.7); // limit to audible spectrum
+      const angleStep = (Math.PI * 2) / numBars;
+      
+      // Rotate the entire circular visualizer based on time
+      ctx.rotate(Date.now() * 0.0005);
       
       for (let i = 0; i < numBars; i++) {
-        // Apply log-like scaling for higher frequencies to look visually exciting
         const val = dataArray[i];
-        barHeight = (val / 255) * (height * 0.75);
-        barHeight = Math.max(2, barHeight); // minimum height
-
-        // Dual gradients
-        const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
-        gradient.addColorStop(0, "rgba(189, 0, 255, 0.1)");
-        gradient.addColorStop(0.5, "rgba(0, 243, 255, 0.8)");
-        gradient.addColorStop(1, "rgba(0, 243, 255, 1)");
-
-        ctx.shadowBlur = isPlaying ? Math.min(20, 5 + bassEnergy * 25) : 5;
-        ctx.shadowColor = "#00f3ff";
-
-        // Draw Right Side Bar
-        ctx.fillStyle = gradient;
-        ctx.fillRect(width / 2 + x, height - barHeight - 10, barWidth - 2, barHeight);
-
-        // Draw Left Side Bar (Mirror)
-        ctx.fillStyle = gradient;
-        ctx.fillRect(width / 2 - x - barWidth, height - barHeight - 10, barWidth - 2, barHeight);
-
-        x += barWidth;
-        ctx.shadowBlur = 0; // Reset shadow for efficiency
+        
+        // Scale frequency data
+        const barHeight = (val / 255) * (height * 0.3) + 5;
+        
+        // 3D Depth calculation (fake Z-axis by scaling size and opacity based on angle)
+        const currentAngle = angleStep * i;
+        const zDepth = Math.sin(currentAngle + Date.now() * 0.002); // -1 to 1
+        
+        const scaledRadius = radius + (zDepth * 10 * bassEnergy);
+        const thickness = Math.max(1, 4 * ((zDepth + 1.5) / 2));
+        
+        const startX = Math.cos(currentAngle) * scaledRadius;
+        const startY = Math.sin(currentAngle) * scaledRadius;
+        const endX = Math.cos(currentAngle) * (scaledRadius + barHeight);
+        const endY = Math.sin(currentAngle) * (scaledRadius + barHeight);
+        
+        // Dynamic colors based on frequency and depth
+        const hue = (i / numBars) * 360 + (Date.now() * 0.05);
+        const alpha = Math.max(0.1, (zDepth + 1) / 2);
+        
+        ctx.strokeStyle = `hsla(${hue}, 100%, 60%, ${alpha})`;
+        ctx.lineWidth = thickness;
+        ctx.lineCap = "round";
+        
+        ctx.shadowBlur = isPlaying ? Math.min(20, 10 + bassEnergy * 30) : 5;
+        ctx.shadowColor = `hsla(${hue}, 100%, 60%, 1)`;
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
       }
+      
+      // Inner bass pulse circle
+      ctx.beginPath();
+      ctx.arc(0, 0, radius - 5 + (bassEnergy * 30), 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0, 243, 255, ${0.3 + bassEnergy * 0.5})`;
+      ctx.lineWidth = 2 + bassEnergy * 5;
+      ctx.stroke();
+      
+      ctx.restore();
 
       // 4. Draw a futuristic horizontal glowing beatline
       ctx.shadowBlur = 10;

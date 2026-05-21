@@ -21,8 +21,7 @@ export default function Sidebar({ activeTab, setActiveTab, isTransitioning }: Si
     { id: "studio", label: "Mix Studio", icon: Sliders },
     { id: "remix-lab", label: "AI Remix Lab", icon: Music },
     { id: "portal", label: "YouTube Portal", icon: Video },
-    { id: "export", label: "Export Center", icon: Download },
-    { id: "history", label: "History & Presets", icon: History },
+    { id: "history", label: "History & Sessions", icon: History },
   ];
 
   return (
