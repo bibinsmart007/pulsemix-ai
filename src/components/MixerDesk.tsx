@@ -48,7 +48,7 @@ function ChannelStrip({
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full relative z-10">
+    <div className="flex flex-col items-center gap-6 w-full relative z-10 bg-black/30 border border-white/5 rounded-2xl py-4 px-2 shadow-inner">
       <div className="font-mono text-[10px] font-bold text-neutral-500 mb-2">
         <span className={accentColor}>CH {deckId}</span>
       </div>
@@ -144,7 +144,7 @@ export default function MixerDesk({
   ] as const;
 
   return (
-    <div className="glass-panel rounded-3xl p-6 border border-white/5 flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
+    <div className="glass-panel rounded-3xl p-4 border border-white/10 bg-neutral-950/80 flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
       
       {/* Top Header: Master Vol & FX */}
       <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-2xl gap-4 relative">

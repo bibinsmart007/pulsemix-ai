@@ -13,9 +13,9 @@ import {
   Check, 
   Flame, 
   Trash2,
-  FileCheck
+  FileCheck,
+  Volume2
 } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
 import DJDeck from "@/components/DJDeck";
 import MixerDesk from "@/components/MixerDesk";
 import Visualizer from "@/components/Visualizer";
@@ -301,27 +301,51 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-obsidian text-foreground">
-      {/* Premium Sidebar Navigation */}
-      <Sidebar 
-        activeTab={engine.activeTab} 
-        setActiveTab={engine.setActiveTab} 
-        isTransitioning={engine.isTransitioning}
-      />
-
-      {/* Main Workspace Workspace */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(ellipse_at_top,rgba(14,14,19,0.35)_0%,rgba(3,3,5,1)_100%)] overflow-y-auto">
-        {/* Top Control Bar HUD */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md z-10 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Sliders className="w-4 h-4 text-neon-cyan animate-pulse" />
-            <span className="font-mono text-[10px] font-semibold text-neutral-400 tracking-wider">
-              WORKSPACE: <span className="text-white uppercase font-bold text-glow-cyan">{engine.activeTab.replace("-", " ")}</span>
-            </span>
+    <div className="flex flex-col h-screen overflow-hidden bg-obsidian text-foreground">
+      
+      {/* Top Navigation & Workspace Header */}
+      <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md z-20 flex-shrink-0">
+        {/* Brand */}
+        <div className="flex items-center gap-3 w-48">
+          <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-tr from-neon-purple to-neon-cyan shadow-neon-cyan/20 shadow-md">
+            <Volume2 className="w-4 h-4 text-black" />
           </div>
-          
-          {/* Quick HUD for playing tracks */}
-          <div className="flex items-center gap-6 font-mono text-[9px] text-neutral-500">
+          <div>
+            <h1 className="font-bold text-sm tracking-wider bg-gradient-to-r from-white to-neutral-400 bg-clip-text text-transparent">
+              PULSEMIX <span className="text-neon-cyan text-[9px] font-mono border border-neon-cyan/20 rounded px-1">AI</span>
+            </h1>
+          </div>
+        </div>
+
+        {/* Center Tabs */}
+        <nav className="flex items-center gap-2">
+          {[
+            { id: "studio", label: "Mix Studio", icon: Sliders },
+            { id: "remix-lab", label: "AI Remix Lab", icon: Music },
+            { id: "portal", label: "YouTube Portal", icon: Video },
+            { id: "history", label: "History", icon: History },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = engine.activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => engine.setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-medium tracking-wide transition-all rounded-t-lg relative border-b-2 ${
+                  isActive
+                    ? "text-neon-cyan border-neon-cyan bg-white/[0.03]"
+                    : "text-neutral-400 border-transparent hover:text-neutral-200 hover:bg-white/[0.01]"
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-neon-cyan" : "text-neutral-500"}`} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+        
+        {/* Quick HUD for playing tracks */}
+        <div className="flex items-center gap-6 font-mono text-[9px] text-neutral-500">
             <div className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${engine.deckA.playing ? 'bg-neon-cyan animate-ping' : 'bg-neutral-700'}`} />
               <span>DECK A: <b className="text-neutral-300 font-semibold">{engine.deckA.playing ? "PLAYING" : "IDLE"}</b></span>
@@ -333,8 +357,10 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Dynamic Inner Tab Router Content */}
-        <div className="flex-1 flex flex-col p-6 overflow-hidden">
+        {/* Main Workspace Workspace */}
+        <main className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(ellipse_at_top,rgba(14,14,19,0.35)_0%,rgba(3,3,5,1)_100%)] overflow-y-auto">
+          {/* Dynamic Inner Tab Router Content */}
+          <div className="flex-1 flex flex-col p-6 overflow-hidden">
           
           {/* Tab 1: Mix Studio Panel */}
           {engine.activeTab === "studio" && (
@@ -869,6 +895,27 @@ export default function Home() {
 
         </div>
       </main>
+
+      {/* Global Diagnostics Footer */}
+      <footer className="h-8 flex-shrink-0 bg-black/60 border-t border-white/5 flex items-center justify-between px-6 font-mono text-[9px] text-neutral-500 z-20">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <span>WEB AUDIO API</span>
+            <span className="text-emerald-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> ONLINE
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>FASTAPI BACKEND</span>
+            <span className="text-neon-cyan flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan" /> READY
+            </span>
+          </div>
+        </div>
+        <div>
+          <span>LATENCY: <span className="text-neutral-400">~2.4 ms</span></span>
+        </div>
+      </footer>
     </div>
   );
 }

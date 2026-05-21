@@ -193,12 +193,7 @@ export default function Visualizer({ analyser, isPlaying }: VisualizerProps) {
       <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-neon-cyan/40 to-transparent z-10" />
       <canvas ref={canvasRef} className="w-full h-full block" />
       
-      {/* Real-time Overlay HUD */}
-      <div className="absolute top-4 left-6 pointer-events-none font-mono text-[9px] text-neutral-500 space-y-1 z-10 select-none">
-        <p className="text-neon-cyan text-glow-cyan text-[10px] font-bold">FFT SPECTRUM ANALYSER</p>
-        <p>CHANNELS: STEREO (L/R)</p>
-        <p>BINS: {analyser ? analyser.frequencyBinCount : 128} POINT FFT</p>
-      </div>
+      {/* Removed debug info for cleaner UI */}
 
       <div className="absolute top-4 right-6 pointer-events-none font-mono text-[9px] text-neutral-400 flex gap-4 z-10 select-none">
         <div className="flex items-center gap-1.5">

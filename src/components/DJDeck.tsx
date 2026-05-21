@@ -97,19 +97,25 @@ export default function DJDeck({
 
       {/* Deck Header: Title & Time */}
       <div className="flex justify-between items-start gap-4">
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+          <div className="flex items-center gap-2 mb-2">
             <span className={`w-2 h-2 rounded-full ${state.playing ? 'animate-pulse' : ''} ${accentBg}`} />
             <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">
               Deck {deckId} <span className="text-neutral-600 px-1">•</span> {state.genre || 'No Genre'}
             </p>
           </div>
-          <h3 className="font-bold text-lg tracking-wide truncate text-white" title={state.title}>
+          
+          <h3 className="font-bold text-lg tracking-wide truncate text-white mb-2" title={state.title}>
             {state.loading ? "Loading track..." : state.title || "No Track Loaded"}
           </h3>
-          <div className="flex gap-4 text-[10px] text-neutral-500 font-mono">
-            <span>KEY: <b className="text-neutral-300">{state.key || '--'}</b></span>
-            <span>BPM: <b className="text-neutral-300">{state.bpm ? state.bpm.toFixed(1) : '--'}</b></span>
+          
+          <div className="flex gap-2 text-[10px] text-neutral-400 font-mono mt-auto">
+            <div className="bg-black/40 border border-white/5 px-2 py-1 rounded">
+              KEY: <b className="text-white">{state.key || '--'}</b>
+            </div>
+            <div className="bg-black/40 border border-white/5 px-2 py-1 rounded">
+              BPM: <b className="text-white">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
+            </div>
           </div>
         </div>
 
@@ -134,12 +140,19 @@ export default function DJDeck({
             {!state.trackLoaded && !state.loading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-900/40 select-none">
                 {/* Fake waveform SVG placeholder */}
-                <div className="w-full h-full absolute inset-0 opacity-20 flex items-center justify-center gap-[2px] px-2 overflow-hidden pointer-events-none">
+                <div className="w-full h-full absolute inset-0 opacity-10 flex items-center justify-center gap-[2px] px-2 overflow-hidden pointer-events-none">
                   {Array.from({ length: 80 }).map((_, i) => (
                     <div key={i} className="w-1 bg-neutral-500 rounded-full" style={{ height: `${20 + Math.random() * 60}%` }} />
                   ))}
                 </div>
-                <span className="text-[10px] text-neutral-400 font-mono z-10 font-bold bg-black/60 px-3 py-1 rounded">DROP AUDIO FILE HERE</span>
+                
+                <div className="z-10 flex flex-col items-center gap-2 bg-neutral-900/80 border border-white/10 px-6 py-3 rounded-2xl shadow-lg cursor-pointer hover:bg-neutral-800 transition-colors">
+                  <div className="flex items-center gap-2 text-neutral-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span className="text-[11px] font-bold tracking-wider">LOAD AUDIO FILE</span>
+                  </div>
+                  <span className="text-[9px] text-neutral-500 font-mono">Drop file here to begin</span>
+                </div>
               </div>
             )}
             
