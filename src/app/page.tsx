@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import DJDeck from "@/components/DJDeck";
-import EQControls from "@/components/EQControls";
 import MixerDesk from "@/components/MixerDesk";
+import Visualizer from "@/components/Visualizer";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { getCompatibleKeys } from "@/utils/audio";
 
@@ -312,16 +312,21 @@ export default function Home() {
       {/* Main Workspace Workspace */}
       <main className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(ellipse_at_top,rgba(14,14,19,0.35)_0%,rgba(3,3,5,1)_100%)] overflow-y-auto">
         {/* Top Control Bar HUD */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-black/20 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <Sliders className="w-4 h-4 text-neon-cyan animate-pulse" />
-            <span className="font-mono text-xs font-semibold text-neutral-400 tracking-wider">
-              WORKSPACE VIEW: <span className="text-white uppercase font-bold text-glow-cyan">{engine.activeTab.replace("-", " ")}</span>
+            <span className="font-mono text-[10px] font-semibold text-neutral-400 tracking-wider">
+              WORKSPACE: <span className="text-white uppercase font-bold text-glow-cyan">{engine.activeTab.replace("-", " ")}</span>
             </span>
+          </div>
+
+          {/* Moved Visualizer to global header to save space in central mixer */}
+          <div className="hidden lg:block flex-1 max-w-xl mx-8 h-8 opacity-70">
+            <Visualizer analyser={engine.analyserNode} isPlaying={engine.deckA.playing || engine.deckB.playing} />
           </div>
           
           {/* Quick HUD for playing tracks */}
-          <div className="flex items-center gap-6 font-mono text-[10px] text-neutral-500">
+          <div className="flex items-center gap-6 font-mono text-[9px] text-neutral-500">
             <div className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${engine.deckA.playing ? 'bg-neon-cyan animate-ping' : 'bg-neutral-700'}`} />
               <span>DECK A: <b className="text-neutral-300 font-semibold">{engine.deckA.playing ? "PLAYING" : "IDLE"}</b></span>
@@ -338,45 +343,37 @@ export default function Home() {
           
           {/* Tab 1: Mix Studio Panel */}
           {engine.activeTab === "studio" && (
-            <div className="space-y-6">
-              {/* Core studio grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            <div className="h-full flex flex-col">
+              {/* Core studio grid: 3 Columns on large screens */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full items-stretch pb-6">
                 
-                {/* Left Side: Deck A + EQ Channel A */}
-                <div className="lg:col-span-5 flex flex-col md:flex-row gap-4 items-stretch">
-                  <div className="flex-1 min-w-0">
-                    <DJDeck 
-                      deckId="A" 
-                      state={engine.deckA}
-                      onPlay={() => engine.playDeck("A")}
-                      onPause={() => engine.pauseDeck("A")}
-                      onSeek={(sec) => engine.seekDeck("A", sec)}
-                      onBpmChange={(bpm) => engine.updateBpm("A", bpm)}
-                      onPitchChange={(pitch) => engine.updatePitch("A", pitch)}
-                      onSync={() => engine.syncDecks("B")}
-                      onVinylStop={() => engine.triggerVinylStop("A")}
-                      onSetHotCue={(i, t) => engine.setHotCue("A", i, t)}
-                      onTriggerHotCue={(i) => engine.triggerHotCue("A", i)}
-                      onToggleLoop={(bars) => engine.toggleLoop("A", bars)}
-                      onFileDrop={(file) => {
-                        const url = URL.createObjectURL(file);
-                        engine.loadTrack("A", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
-                      }}
-                    />
-                  </div>
-                  <EQControls 
+                {/* Left Side: Deck A */}
+                <div className="xl:col-span-4 min-w-0 flex flex-col h-full">
+                  <DJDeck 
                     deckId="A" 
                     state={engine.deckA}
-                    onEQChange={(band, db) => engine.updateEQ("A", band, db)}
-                    onFilterChange={(val) => engine.updateFilter("A", val)}
-                    onVolumeChange={(vol) => engine.updateDeckVolume("A", vol)}
+                    onPlay={() => engine.playDeck("A")}
+                    onPause={() => engine.pauseDeck("A")}
+                    onSeek={(sec) => engine.seekDeck("A", sec)}
+                    onBpmChange={(bpm) => engine.updateBpm("A", bpm)}
+                    onPitchChange={(pitch) => engine.updatePitch("A", pitch)}
+                    onSync={() => engine.syncDecks("B")}
+                    onVinylStop={() => engine.triggerVinylStop("A")}
+                    onSetHotCue={(i, t) => engine.setHotCue("A", i, t)}
+                    onTriggerHotCue={(i) => engine.triggerHotCue("A", i)}
+                    onToggleLoop={(bars) => engine.toggleLoop("A", bars)}
+                    onFileDrop={(file) => {
+                      const url = URL.createObjectURL(file);
+                      engine.loadTrack("A", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
+                    }}
                   />
                 </div>
 
-                {/* Central Column: Master Mixer Desk */}
-                <div className="lg:col-span-2 flex flex-col">
+                {/* Central Column: Master Mixer Desk (Contains EQ strips for both channels) */}
+                <div className="xl:col-span-4 flex flex-col h-full">
                   <MixerDesk 
-                    analyserNode={engine.analyserNode}
+                    stateA={engine.deckA}
+                    stateB={engine.deckB}
                     isPlaying={engine.deckA.playing || engine.deckB.playing}
                     crossfader={engine.crossfader}
                     setCrossfader={engine.setCrossfader}
@@ -385,40 +382,34 @@ export default function Home() {
                     isTransitioning={engine.isTransitioning}
                     transitionProgress={engine.transitionProgress}
                     onTriggerTransition={engine.triggerAutomatedTransition}
-                    delayActive={engine.deckA.filter !== 0 || engine.deckB.filter !== 0} // visual link
+                    delayActive={engine.deckA.filter !== 0 || engine.deckB.filter !== 0}
                     reverbActive={engine.isTransitioning}
                     onToggleFX={(fx, val) => engine.updateFX(fx, val)}
+                    onEQChange={(deckId, band, val) => engine.updateEQ(deckId, band, val)}
+                    onFilterChange={(deckId, val) => engine.updateFilter(deckId, val)}
+                    onVolumeChange={(deckId, val) => engine.updateDeckVolume(deckId, val)}
                   />
                 </div>
 
-                {/* Right Side: Deck B + EQ Channel B */}
-                <div className="lg:col-span-5 flex flex-col md:flex-row-reverse gap-4 items-stretch">
-                  <div className="flex-1 min-w-0">
-                    <DJDeck 
-                      deckId="B" 
-                      state={engine.deckB}
-                      onPlay={() => engine.playDeck("B")}
-                      onPause={() => engine.pauseDeck("B")}
-                      onSeek={(sec) => engine.seekDeck("B", sec)}
-                      onBpmChange={(bpm) => engine.updateBpm("B", bpm)}
-                      onPitchChange={(pitch) => engine.updatePitch("B", pitch)}
-                      onSync={() => engine.syncDecks("A")}
-                      onVinylStop={() => engine.triggerVinylStop("B")}
-                      onSetHotCue={(i, t) => engine.setHotCue("B", i, t)}
-                      onTriggerHotCue={(i) => engine.triggerHotCue("B", i)}
-                      onToggleLoop={(bars) => engine.toggleLoop("B", bars)}
-                      onFileDrop={(file) => {
-                        const url = URL.createObjectURL(file);
-                        engine.loadTrack("B", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
-                      }}
-                    />
-                  </div>
-                  <EQControls 
+                {/* Right Side: Deck B */}
+                <div className="xl:col-span-4 min-w-0 flex flex-col h-full">
+                  <DJDeck 
                     deckId="B" 
                     state={engine.deckB}
-                    onEQChange={(band, db) => engine.updateEQ("B", band, db)}
-                    onFilterChange={(val) => engine.updateFilter("B", val)}
-                    onVolumeChange={(vol) => engine.updateDeckVolume("B", vol)}
+                    onPlay={() => engine.playDeck("B")}
+                    onPause={() => engine.pauseDeck("B")}
+                    onSeek={(sec) => engine.seekDeck("B", sec)}
+                    onBpmChange={(bpm) => engine.updateBpm("B", bpm)}
+                    onPitchChange={(pitch) => engine.updatePitch("B", pitch)}
+                    onSync={() => engine.syncDecks("A")}
+                    onVinylStop={() => engine.triggerVinylStop("B")}
+                    onSetHotCue={(i, t) => engine.setHotCue("B", i, t)}
+                    onTriggerHotCue={(i) => engine.triggerHotCue("B", i)}
+                    onToggleLoop={(bars) => engine.toggleLoop("B", bars)}
+                    onFileDrop={(file) => {
+                      const url = URL.createObjectURL(file);
+                      engine.loadTrack("B", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
+                    }}
                   />
                 </div>
 

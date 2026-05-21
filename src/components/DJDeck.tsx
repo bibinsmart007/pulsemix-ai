@@ -39,7 +39,6 @@ export default function DJDeck({
   const isA = deckId === "A";
   const accentColor = isA ? "text-neon-cyan" : "text-neon-purple";
   const borderColor = isA ? "border-neon-cyan/20" : "border-neon-purple/20";
-  const shadowColor = isA ? "shadow-neon-cyan/10" : "shadow-neon-purple/10";
   const glowBorderClass = isA ? "focus-within:border-neon-cyan/40" : "focus-within:border-neon-purple/40";
   const accentBg = isA ? "bg-neon-cyan" : "bg-neon-purple";
 
@@ -84,7 +83,7 @@ export default function DJDeck({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`glass-panel rounded-3xl p-6 ${shadowColor} shadow-xl border ${isDragging ? 'border-neon-pink bg-neon-pink/5 scale-[1.02]' : 'border-white/5'} flex flex-col gap-6 relative transition-all duration-300 ${glowBorderClass}`}
+      className={`glass-panel rounded-3xl p-5 shadow-2xl border ${isDragging ? 'border-neon-pink bg-neon-pink/5 scale-[1.02]' : 'border-white/5'} flex flex-col gap-5 relative transition-all duration-300 ${glowBorderClass} h-full`}
     >
       {/* Drag overlay */}
       {isDragging && (
@@ -92,199 +91,61 @@ export default function DJDeck({
           <p className="font-mono text-neon-pink font-bold text-xl tracking-widest pointer-events-none">DROP FILE TO LOAD TO DECK {deckId}</p>
         </div>
       )}
+
       {/* Glow corner highlights */}
       <div className={`absolute top-0 ${isA ? 'left-6' : 'right-6'} w-24 h-[1px] bg-gradient-to-r from-transparent via-${isA ? 'neon-cyan' : 'neon-purple'}/50 to-transparent`} />
 
-      {/* Deck Header LCD HUD */}
-      <div className="bg-black/60 rounded-2xl p-4 border border-white/[0.03] flex items-center justify-between font-mono relative overflow-hidden">
-        {/* Glow grid background */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_60%,rgba(0,243,255,0.02)_100%)] pointer-events-none" />
-        
-        <div className="space-y-1.5 z-10 max-w-[65%]">
-          <p className={`text-[10px] uppercase font-bold tracking-widest ${accentColor}`}>
-            DECK {deckId} • {state.genre}
-          </p>
-          <h3 className="font-bold text-sm tracking-wide truncate text-white" title={state.title}>
-            {state.loading ? "LOADING AUDIO STREAM..." : state.title}
+      {/* Deck Header: Title & Time */}
+      <div className="flex justify-between items-start gap-4">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${state.playing ? 'animate-pulse' : ''} ${accentBg}`} />
+            <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">
+              Deck {deckId} <span className="text-neutral-600 px-1">•</span> {state.genre || 'No Genre'}
+            </p>
+          </div>
+          <h3 className="font-bold text-lg tracking-wide truncate text-white" title={state.title}>
+            {state.loading ? "Loading track..." : state.title || "No Track Loaded"}
           </h3>
-          <div className="flex gap-4 text-[10px] text-neutral-500">
-            <span>KEY: <b className="text-neutral-300 font-semibold">{state.key}</b></span>
-            <span>ORIGINAL: {state.originalKey}</span>
+          <div className="flex gap-4 text-[10px] text-neutral-500 font-mono">
+            <span>KEY: <b className="text-neutral-300">{state.key || '--'}</b></span>
+            <span>BPM: <b className="text-neutral-300">{state.bpm ? state.bpm.toFixed(1) : '--'}</b></span>
           </div>
         </div>
 
-        {/* Digital Time Code display */}
-        <div className="text-right z-10">
-          <div className={`text-2xl font-bold tracking-wider font-mono ${accentColor} text-glow-${isA ? 'cyan' : 'purple'}`}>
+        <div className="text-right flex-shrink-0">
+          <div className={`text-3xl font-light font-mono ${accentColor}`}>
             {formatTime(state.currentTime)}
           </div>
-          <div className="text-[9px] text-neutral-500 font-mono tracking-wider">
-            REMAINING: -{formatTime(Math.max(0, state.duration - state.currentTime))}
+          <div className="text-[10px] text-neutral-500 font-mono tracking-wider">
+            -{formatTime(Math.max(0, state.duration - state.currentTime))}
           </div>
         </div>
       </div>
 
-      {/* Center Platter & Jog Wheel Area + Pitch Fader */}
-      <div className="flex items-center justify-between gap-6 py-2">
-        {/* Jog Wheel Platter */}
-        <div className="flex-1 flex justify-center items-center relative">
-          <div className={`relative w-44 h-44 rounded-full bg-neutral-950 flex items-center justify-center border-4 border-neutral-900 shadow-inner group ${state.playing ? 'animate-[pulse_3s_ease-in-out_infinite]' : ''}`}>
-            
-            {/* Outer vinyl grooves */}
-            <div className="absolute inset-2 rounded-full border border-neutral-800/40" />
-            <div className="absolute inset-6 rounded-full border border-neutral-800/40" />
-            <div className="absolute inset-10 rounded-full border border-neutral-800/40" />
-            <div className="absolute inset-14 rounded-full border border-neutral-800/40" />
-            
-            {/* Platter Spin Ring */}
-            <div 
-              className={`absolute inset-0.5 rounded-full border-2 border-dashed transition-all duration-1000 ${
-                state.playing 
-                  ? `${isA ? 'border-neon-cyan/20 animate-jog-spin' : 'border-neon-purple/20 animate-jog-spin'}` 
-                  : 'border-transparent'
-              }`}
-              style={{ animationDuration: `${2 / (1 + state.pitch)}s` }}
-            />
-            
-            {/* Rotating Platter Center */}
-            <div 
-              className={`w-20 h-20 rounded-full bg-neutral-900 shadow-2xl flex items-center justify-center relative border border-white/5 ${
-                state.playing ? 'animate-jog-spin' : ''
-              }`}
-              style={{ animationDuration: `${2 / (1 + state.pitch)}s` }}
-            >
-              {/* Slipmat center hub */}
-              <div className={`w-8 h-8 rounded-full ${accentBg}/10 flex items-center justify-center border border-${isA ? 'neon-cyan' : 'neon-purple'}/20 relative`}>
-                <Disc className={`w-4 h-4 ${accentColor}`} />
-                {/* Spindle hole */}
-                <div className="w-1.5 h-1.5 rounded-full bg-black absolute center" />
-              </div>
-              
-              {/* Platter playhead visual line marker */}
-              <div className={`absolute top-0 bottom-1/2 w-0.5 ${accentBg} shadow-${isA ? 'neon-cyan' : 'neon-purple'} shadow-[0_0_8px] origin-bottom`} />
-            </div>
-
-            {/* Pitch Speed display inside platter */}
-            <div className="absolute bottom-3 font-mono text-[9px] text-neutral-500 font-semibold select-none">
-              PITCH: <span className={state.pitch !== 0 ? accentColor : "text-neutral-400"}>
-                {state.pitch >= 0 ? "+" : ""}
-                {(state.pitch * 100).toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Vertical Tempo / Pitch Slider */}
-        <div className="flex flex-col items-center h-44 w-12 bg-black/40 border border-white/5 py-4 px-1 rounded-2xl relative select-none">
-          <span className="text-[8px] text-neutral-500 font-mono font-bold">+10</span>
-          
-          <input 
-            type="range"
-            min="-0.10"
-            max="0.10"
-            step="0.001"
-            value={state.pitch}
-            onChange={handlePitchSlider}
-            className={`accent-${isA ? 'neon-cyan' : 'neon-purple'} h-24 my-2 vertical-slider appearance-none w-1 bg-neutral-800 rounded outline-none cursor-row-resize`}
-            style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
-          />
-          
-          <span className="text-[8px] text-neutral-500 font-mono font-bold">-10</span>
-          
-          {/* Zero pitch lock button */}
-          <button 
-            onClick={() => onPitchChange(0)}
-            className={`absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded border text-[7px] font-mono font-semibold tracking-tighter ${
-              state.pitch === 0 
-                ? "bg-neutral-800 text-neutral-400 border-neutral-700" 
-                : `bg-transparent text-neutral-500 border-transparent hover:text-white`
-            }`}
-          >
-            LOCK
-          </button>
-        </div>
-      </div>
-
-      {/* 100x Upgrade: Hot Cues & Loops */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Hot Cues (4 pads) */}
-        <div className="bg-black/40 rounded-xl p-2 border border-white/5 space-y-2">
-          <div className="text-[9px] font-mono text-neutral-500 font-bold px-1 flex justify-between">
-            <span>HOT CUES</span>
-            <span className="text-neutral-600">SET / JUMP</span>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {[0, 1, 2, 3].map(i => {
-              const hasCue = state.hotCues && state.hotCues[i] !== null;
-              return (
-                <button
-                  key={i}
-                  onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
-                  className={`h-8 rounded cursor-pointer font-mono text-[10px] font-bold transition-all shadow-[inset_0_-2px_4px_rgba(0,0,0,0.6)] ${
-                    hasCue 
-                      ? `${accentBg} text-black border border-white/20 shadow-${isA ? 'neon-cyan' : 'neon-purple'}/50 brightness-110` 
-                      : 'bg-neutral-800 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Auto Loop */}
-        <div className="bg-black/40 rounded-xl p-2 border border-white/5 space-y-2 flex flex-col justify-between">
-          <div className="text-[9px] font-mono text-neutral-500 font-bold px-1 flex justify-between">
-            <span>AUTO LOOP</span>
-            <span className="text-neutral-600">{state.loopActive ? "ACTIVE" : "OFF"}</span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onToggleLoop(4)}
-              className={`flex-1 h-8 rounded cursor-pointer font-mono text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
-                state.loopActive 
-                  ? 'bg-amber-500 text-black border border-amber-300 shadow-amber-500/50 shadow-md animate-pulse' 
-                  : 'bg-neutral-800 text-neutral-400 border border-neutral-700/50 hover:bg-neutral-700'
-              }`}
-            >
-              <RotateCcw className="w-3 h-3" />
-              4 BARS
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Waveform Visualization Slot */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono">
-          <span>WAVEFORM PREVIEW</span>
-          <span>BPM: <b className="text-neutral-300 font-semibold">{state.bpm.toFixed(1)}</b> (ORIGINAL: {state.originalBpm})</span>
-        </div>
-        
-        {/* Seekable Playhead slider overlapping Waveform container */}
-        <div className="relative">
-          {/* Real mounting slot for wavesurfer */}
+      {/* Waveform Visualization (Wide Full Width) */}
+      <div className="space-y-1 mt-2">
+        <div className="relative w-full">
+          {/* Mounting slot for wavesurfer */}
           <div 
             id={`waveform-${deckId}`} 
-            className="w-full h-12 bg-black/60 border border-white/5 rounded-xl overflow-hidden relative"
+            className="w-full h-16 bg-black/60 border border-white/5 rounded-xl overflow-hidden relative"
           >
-            {/* Decorative placeholder visual grid before audio loads */}
             {!state.trackLoaded && !state.loading && (
               <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-600 font-mono select-none">
-                PASTE A LINK OR LOAD A DEMO SONG TO GENERATE WAVEFORM
+                DROP AUDIO FILE HERE
               </div>
             )}
             
             {state.loading && (
               <div className="absolute inset-0 flex items-center justify-center gap-2 text-[10px] text-neon-cyan font-mono animate-pulse bg-black/70">
                 <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan animate-ping" />
-                DOWNLOADING & EXTRACTING AUDIO BUFFERS...
+                LOADING AUDIO...
               </div>
             )}
           </div>
 
-          {/* Simple seek overlay bar */}
+          {/* Seek overlay slider */}
           {state.trackLoaded && !state.loading && (
             <input 
               type="range"
@@ -299,62 +160,142 @@ export default function DJDeck({
         </div>
       </div>
 
-      {/* Transport Control Buttons (Transport Desk) */}
-      <div className="grid grid-cols-5 gap-3 mt-1">
-        {/* Cue point button */}
-        <button 
-          onClick={() => onSeek(0)}
-          disabled={!state.trackLoaded}
-          className={`py-3.5 rounded-xl border border-white/5 bg-neutral-900/60 hover:bg-neutral-800 text-xs font-mono font-bold tracking-widest text-neutral-300 shadow active:scale-95 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>CUE</span>
-        </button>
+      {/* Platter & Pitch Fader Area */}
+      <div className="flex-1 flex items-center justify-center gap-8 py-2">
+        {/* Jog Wheel Platter */}
+        <div className="relative w-48 h-48 rounded-full bg-neutral-950 flex items-center justify-center border-4 border-neutral-900 shadow-inner group">
+          {/* Vinyl grooves */}
+          <div className="absolute inset-2 rounded-full border border-neutral-800/30" />
+          <div className="absolute inset-6 rounded-full border border-neutral-800/30" />
+          <div className="absolute inset-10 rounded-full border border-neutral-800/30" />
+          <div className="absolute inset-14 rounded-full border border-neutral-800/30" />
+          
+          {/* Spin Ring */}
+          <div 
+            className={`absolute inset-1 rounded-full border-2 border-dashed transition-all duration-1000 ${
+              state.playing 
+                ? `border-${accentColor.replace('text-', '')}/30 animate-jog-spin` 
+                : 'border-transparent'
+            }`}
+            style={{ animationDuration: `${2 / (1 + state.pitch)}s` }}
+          />
+          
+          {/* Center Hub */}
+          <div 
+            className={`w-20 h-20 rounded-full bg-neutral-900 shadow-2xl flex items-center justify-center relative border border-white/5 ${
+              state.playing ? 'animate-jog-spin' : ''
+            }`}
+            style={{ animationDuration: `${2 / (1 + state.pitch)}s` }}
+          >
+            <div className={`w-8 h-8 rounded-full ${accentBg}/10 flex items-center justify-center border border-${accentColor.replace('text-', '')}/20 relative`}>
+              <Disc className={`w-4 h-4 ${accentColor}`} />
+              <div className="w-1.5 h-1.5 rounded-full bg-black absolute center" />
+            </div>
+            {/* Marker */}
+            <div className={`absolute top-0 bottom-1/2 w-0.5 ${accentBg} shadow-[0_0_8px_${accentBg}] origin-bottom`} />
+          </div>
 
-        {/* Play/Pause Button */}
-        <button
-          onClick={state.playing ? onPause : onPlay}
-          disabled={!state.trackLoaded || state.loading}
-          className={`col-span-2 py-3.5 rounded-xl border flex items-center justify-center gap-2 text-sm font-bold tracking-widest cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all shadow-md ${
-            state.playing
-              ? `bg-black/40 border-${isA ? 'neon-cyan' : 'neon-purple'}/50 text-white shadow-${isA ? 'neon-cyan' : 'neon-purple'}/10`
-              : `${accentBg} text-black border-transparent hover:brightness-110 shadow-lg shadow-${isA ? 'neon-cyan' : 'neon-purple'}/20`
-          }`}
-        >
-          {state.playing ? (
-            <>
-              <Pause className="w-4 h-4 fill-current" />
-              <span>PAUSE</span>
-            </>
-          ) : (
-            <>
-              <Play className="w-4 h-4 fill-current" />
-              <span>PLAY</span>
-            </>
-          )}
-        </button>
+          {/* Platter Pitch Label */}
+          <div className="absolute bottom-4 font-mono text-[9px] font-semibold text-neutral-500">
+            {state.pitch >= 0 ? "+" : ""}{(state.pitch * 100).toFixed(1)}%
+          </div>
+        </div>
 
-        {/* Vinyl Stop Button */}
-        <button 
-          onClick={onVinylStop}
-          disabled={!state.playing}
-          className="py-3.5 rounded-xl border border-white/5 bg-neutral-900/60 hover:bg-neutral-800 text-[10px] font-mono font-bold tracking-wider text-neutral-400 active:scale-95 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          title="Vinyl Tape Stop Stop"
-        >
-          <span className="text-neon-pink font-semibold">TAPE</span>
-          <span>STOP</span>
-        </button>
+        {/* Pitch Slider Vertical */}
+        <div className="flex flex-col items-center h-48 w-12 bg-black/40 border border-white/5 py-4 rounded-2xl relative">
+          <span className="text-[8px] text-neutral-500 font-mono font-bold">+10</span>
+          <input 
+            type="range"
+            min="-0.10"
+            max="0.10"
+            step="0.001"
+            value={state.pitch}
+            onChange={handlePitchSlider}
+            className={`accent-${accentBg.replace('bg-', '')} h-32 my-2 vertical-slider appearance-none w-1 bg-neutral-800 rounded outline-none cursor-row-resize`}
+            style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
+          />
+          <span className="text-[8px] text-neutral-500 font-mono font-bold">-10</span>
+          
+          <button 
+            onClick={() => onPitchChange(0)}
+            className={`absolute -right-8 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold ${
+              state.pitch === 0 
+                ? "bg-neutral-800 text-neutral-400 border-neutral-700" 
+                : "bg-transparent text-neutral-500 border-neutral-700 hover:text-white"
+            }`}
+          >
+            0%
+          </button>
+        </div>
+      </div>
 
-        {/* BPM Sync button */}
-        <button
-          onClick={onSync}
-          disabled={state.loading}
-          className={`py-3.5 rounded-xl border border-white/5 bg-neutral-900/60 hover:bg-neutral-800 text-xs font-mono font-bold tracking-wider text-neutral-300 active:scale-95 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
-          title="Sync BPM to other Deck"
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
-          <span>SYNC</span>
-        </button>
+      {/* Bottom Controls: Hot Cues, Loops, Transport */}
+      <div className="mt-auto grid grid-cols-12 gap-4">
+        {/* Hot Cues (4 pads) */}
+        <div className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2">
+          <span className="text-[9px] font-mono text-neutral-500 font-bold px-1">HOT CUES</span>
+          <div className="grid grid-cols-4 gap-2 flex-1">
+            {[0, 1, 2, 3].map(i => {
+              const hasCue = state.hotCues && state.hotCues[i] !== null;
+              return (
+                <button
+                  key={i}
+                  onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
+                  className={`rounded cursor-pointer font-mono text-[11px] font-bold transition-all shadow-inner h-full min-h-[36px] ${
+                    hasCue 
+                      ? `${accentBg} text-black border border-white/20 brightness-110` 
+                      : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Transport buttons */}
+        <div className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2">
+          <button 
+            onClick={() => onSeek(0)}
+            disabled={!state.trackLoaded}
+            className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> CUE
+          </button>
+          
+          <button
+            onClick={state.playing ? onPause : onPlay}
+            disabled={!state.trackLoaded || state.loading}
+            className={`flex-[1.5] rounded-lg border flex flex-col items-center justify-center gap-1 text-[11px] font-bold disabled:opacity-50 transition-all ${
+              state.playing
+                ? `bg-neutral-900 border-${accentColor.replace('text-', '')}/50 text-white`
+                : `${accentBg} text-black border-transparent hover:brightness-110`
+            }`}
+          >
+            {state.playing ? <><Pause className="w-4 h-4 fill-current" /> PAUSE</> : <><Play className="w-4 h-4 fill-current" /> PLAY</>}
+          </button>
+
+          <button
+            onClick={onSync}
+            disabled={state.loading || !state.trackLoaded}
+            className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" /> SYNC
+          </button>
+
+          <button
+            onClick={() => onToggleLoop(4)}
+            disabled={!state.trackLoaded}
+            className={`flex-1 rounded-lg border flex flex-col items-center justify-center gap-1 text-[10px] font-mono font-bold disabled:opacity-50 transition-all ${
+              state.loopActive 
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
+                : 'bg-neutral-900 text-neutral-500 border-white/5 hover:text-white'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> LOOP
+          </button>
+        </div>
       </div>
     </div>
   );
