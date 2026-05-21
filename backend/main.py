@@ -37,7 +37,8 @@ os.makedirs(MUSIC_DIR, exist_ok=True)
 # Generate synthetic high-fidelity preset loop files if not present
 from synthesizer import generate_preset_library
 try:
-    generate_preset_library(MUSIC_DIR)
+    if not os.path.exists(os.path.join(MUSIC_DIR, "lofi_raindrops.mp3")):
+        generate_preset_library(MUSIC_DIR)
 except Exception as e:
     print(f"[Backend] Failed to run preset loop synthesizer: {e}")
 

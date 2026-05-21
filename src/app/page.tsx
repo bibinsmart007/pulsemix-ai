@@ -40,7 +40,7 @@ export default function Home() {
 
   // Load preset track list from backend on mount
   useEffect(() => {
-    fetch("http://localhost:8000/api/inventory")
+    fetch("http://127.0.0.1:8000/api/inventory")
       .then(res => res.json())
       .then(data => {
         if (data && data.tracks) {
@@ -156,7 +156,7 @@ export default function Home() {
     setYoutubeUrl("");
 
     try {
-      const response = await fetch("http://localhost:8000/api/import", {
+      const response = await fetch("http://127.0.0.1:8000/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: youtubeUrl }),
