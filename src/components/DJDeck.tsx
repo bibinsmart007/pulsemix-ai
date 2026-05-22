@@ -67,7 +67,7 @@ function PitchCard({ pitch, onPitchChange, accentBg }: { pitch: number, onPitchC
         <h4 className="text-[9px] font-mono font-bold text-neutral-500 tracking-widest border-b border-white/10 pb-2">PITCH</h4>
       </header>
       
-      <ul className="flex flex-col items-center justify-between h-[240px] w-full bg-[#111115] border border-[#1a1a20] py-4 rounded-xl shadow-[inset_0_4px_15px_rgba(0,0,0,1)] relative list-none p-0 m-0">
+      <ul className="flex flex-col items-center justify-between h-[160px] w-full bg-[#111115] border border-[#1a1a20] py-3 rounded-xl shadow-[inset_0_4px_15px_rgba(0,0,0,1)] relative list-none p-0 m-0">
         <li className="w-full flex justify-center block">
           <div className="bg-black px-3 py-2 rounded text-center border border-white/5 shadow-inner min-w-[50px] block">
             <span className="text-[11px] text-neutral-300 font-mono font-bold block">+10%</span>
@@ -166,7 +166,7 @@ function ControlsCard({
               type="button"
               onClick={() => onSeek(0)}
               disabled={!state.trackLoaded}
-              className="w-full h-full min-h-[80px] rounded-[16px] border-[3px] border-white/10 bg-[#1a1a20] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px]"
+              className="w-full h-full min-h-[64px] rounded-[16px] border-[3px] border-white/10 bg-[#1a1a20] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px]"
             >
               <RotateCcw className="w-6 h-6 text-neutral-400 block" />
               <span className="block text-[12px] font-mono font-bold tracking-widest text-neutral-300 w-full text-center">CUE</span>
@@ -178,7 +178,7 @@ function ControlsCard({
               type="button"
               onClick={state.playing ? onPause : onPlay}
               disabled={!state.trackLoaded || state.loading}
-              className={`w-full h-full min-h-[80px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px] ${
+              className={`w-full h-full min-h-[64px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px] ${
                 state.playing
                   ? `bg-black border-${accentColor.replace('text-', '')}/50 text-white shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(0,0,0,0.5)] translate-y-[4px]`
                   : `bg-gradient-to-b ${accentBg === 'bg-neon-cyan' ? 'from-cyan-500 to-cyan-700' : 'from-purple-500 to-purple-700'} border-white/20 text-white hover:brightness-110`
@@ -195,7 +195,7 @@ function ControlsCard({
               type="button"
               onClick={onSync}
               disabled={state.loading || !state.trackLoaded}
-              className="w-full h-full min-h-[80px] rounded-[16px] border-[3px] border-amber-500/20 bg-gradient-to-b from-[#1a1a20] to-[#111] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block group min-w-[64px]"
+              className="w-full h-full min-h-[64px] rounded-[16px] border-[3px] border-amber-500/20 bg-gradient-to-b from-[#1a1a20] to-[#111] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block group min-w-[64px]"
             >
               <Zap className="w-6 h-6 text-amber-500 fill-amber-500/20 group-hover:fill-amber-500 transition-colors block" />
               <span className="block text-[12px] font-mono font-bold tracking-widest text-amber-500 w-full text-center">SYNC</span>
@@ -207,7 +207,7 @@ function ControlsCard({
               type="button"
               onClick={() => onToggleLoop(4)}
               disabled={!state.trackLoaded}
-              className={`w-full h-full min-h-[80px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px] ${
+              className={`w-full h-full min-h-[64px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px] ${
                 state.loopActive 
                   ? 'bg-gradient-to-b from-amber-500 to-amber-700 text-black border-amber-300' 
                   : 'bg-[#1a1a20] border-white/10 hover:bg-[#222] text-neutral-400'
@@ -262,7 +262,7 @@ export default function DJDeck({
       onDragOver={handleDragOver}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
-      className={`bg-gradient-to-b from-[#16161a] to-[#050508] rounded-[36px] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-2 ${isDragging ? 'border-neon-pink bg-neon-pink/5 scale-[1.02]' : 'border-[#1a1a20]'} flex flex-col gap-8 relative transition-all duration-300 ${glowBorderClass} h-full overflow-y-auto`}
+      className={`bg-gradient-to-b from-[#16161a] to-[#050508] rounded-[36px] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-2 ${isDragging ? 'border-neon-pink bg-neon-pink/5 scale-[1.02]' : 'border-[#1a1a20]'} flex flex-col gap-6 relative transition-all duration-300 ${glowBorderClass} h-full overflow-y-auto`}
     >
       {/* Drag overlay */}
       {isDragging && (
@@ -350,7 +350,7 @@ export default function DJDeck({
           
           {/* Jog Wheel Platter */}
           <div className="flex-1 flex justify-center">
-            <div className="relative w-64 h-64 rounded-full bg-black flex items-center justify-center border-[12px] border-[#1a1a20] shadow-[0_20px_50px_rgba(0,0,0,1),inset_0_5px_20px_rgba(0,0,0,0.8)]">
+            <div className="relative w-56 h-56 rounded-full bg-black flex items-center justify-center border-[10px] border-[#1a1a20] shadow-[0_20px_50px_rgba(0,0,0,1),inset_0_5px_20px_rgba(0,0,0,0.8)]">
               <div className="absolute inset-3 rounded-full border-[2px] border-white/5 shadow-inner" />
               <div className="absolute inset-8 rounded-full border-[2px] border-white/5 shadow-inner" />
               <div className="absolute inset-14 rounded-full border-[2px] border-white/5 shadow-inner" />

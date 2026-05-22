@@ -379,7 +379,7 @@ export default function Home() {
               </div>
 
               {/* Core studio grid: Side-by-Side Decks with Central Mixer */}
-              <div className="flex-1 min-h-0 grid gap-6" style={{ gridTemplateColumns: '1fr 340px 1fr' }}>
+              <div className="flex-1 min-h-0 grid gap-6" style={{ gridTemplateColumns: '1fr 420px 1fr' }}>
                 
                 {/* Left Side: Deck A */}
                 <div className="min-w-0 flex flex-col h-full overflow-y-auto">
@@ -914,7 +914,7 @@ export default function Home() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> 
             DSP ACTIVE
           </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1" suppressHydrationWarning>
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_#f59e0b]" /> 
             CPU: {(Math.random() * 5 + 10).toFixed(1)}%
           </span>

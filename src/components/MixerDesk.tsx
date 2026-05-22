@@ -127,8 +127,15 @@ export default function MixerDesk({
     { id: 'reverb-blend', label: 'Reverb Blend', desc: 'Instant 100% switch' },
   ];
 
+  const [activePreset, setActivePreset] = React.useState<string | null>(null);
+
+  // Clear active preset when transition finishes
+  React.useEffect(() => {
+    if (!isTransitioning) setActivePreset(null);
+  }, [isTransitioning]);
+
   return (
-    <article className="bg-[#111115] rounded-[36px] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.9)] border-2 border-[#1a1a20] flex flex-col h-full relative overflow-y-auto">
+    <article className="bg-[#111115] rounded-[36px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)] border-2 border-[#1a1a20] flex flex-col h-full relative overflow-y-auto">
       
       {/* Glow highlight */}
       <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-64 h-[3px] bg-gradient-to-r from-transparent via-white/30 to-transparent shadow-[0_0_20px_rgba(255,255,255,0.2)]`} />
@@ -250,16 +257,24 @@ export default function MixerDesk({
             <li key={preset.id} className="block w-full">
               <button
                 type="button"
-                onClick={() => onTriggerTransition(preset.id as "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", 8)}
-                disabled={isTransitioning}
-                className={`p-5 rounded-[16px] border-[2px] transition-all flex flex-col gap-2 min-h-[96px] block w-full shadow-[0_6px_15px_rgba(0,0,0,0.6)] active:translate-y-1 active:shadow-inner ${
-                  isTransitioning 
+                onClick={() => {
+                  setActivePreset(preset.id);
+                  onTriggerTransition(preset.id as "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", 8);
+                }}
+                disabled={isTransitioning && activePreset !== preset.id}
+                className={`p-5 rounded-[16px] border-[2px] transition-all flex flex-col gap-2 min-h-[96px] block w-full shadow-[0_6px_15px_rgba(0,0,0,0.6)] active:translate-y-1 active:shadow-inner relative overflow-hidden ${
+                  activePreset === preset.id
+                    ? "bg-gradient-to-b from-cyan-900 to-cyan-950 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                    : isTransitioning
                     ? "bg-[#111] border-[#222] opacity-40 cursor-not-allowed" 
                     : "bg-gradient-to-b from-[#1a1a20] to-[#111] border-[#333] hover:border-white/20 hover:from-[#222] hover:to-[#1a1a20]"
                 }`}
               >
-                <h4 className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md w-full m-0 p-0">{preset.label}</h4>
-                <p className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 w-full m-0">{preset.desc}</p>
+                {activePreset === preset.id && (
+                  <div className="absolute top-0 left-0 w-full h-1 bg-cyan-400 animate-pulse" />
+                )}
+                <h4 className={`block text-[15px] font-bold tracking-wide text-left drop-shadow-md w-full m-0 p-0 ${activePreset === preset.id ? 'text-cyan-400' : 'text-white'}`}>{preset.label}</h4>
+                <p className={`block text-[11px] font-mono leading-relaxed text-left border-t border-white/5 pt-2 w-full m-0 ${activePreset === preset.id ? 'text-cyan-200' : 'text-neutral-400'}`}>{preset.desc}</p>
               </button>
             </li>
           ))}
@@ -267,7 +282,7 @@ export default function MixerDesk({
       </article>
 
       {/* Crossfader Area */}
-      <article className="bg-gradient-to-b from-[#050508] to-[#0a0a0e] rounded-[24px] p-10 border border-[#222] mt-auto relative shadow-[inset_0_15px_30px_rgba(0,0,0,1)]">
+      <article className="bg-gradient-to-b from-[#050508] to-[#0a0a0e] rounded-[24px] p-8 border border-[#222] mt-auto relative shadow-[inset_0_15px_30px_rgba(0,0,0,1)] sticky bottom-0 z-50">
         <header className="sr-only">
           <h3>Crossfader</h3>
         </header>
