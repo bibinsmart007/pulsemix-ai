@@ -122,7 +122,8 @@ export default function DJDeck({
         </div>
 
         {/* Separator div for DOM extractors */}
-        <div aria-hidden="true" className="h-0 leading-none">&nbsp;</div>
+        <div className="w-full h-2"></div>
+        <span className="sr-only">{"\n"}---{"\n"}</span>
 
         <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-3 py-1.5 rounded w-full mt-1">
           <span>KEY:&nbsp;<b className="text-white">{state.key || '--'}</b></span>
@@ -136,7 +137,7 @@ export default function DJDeck({
       </section>
 
       {/* Waveform Visualization (Wide Full Width) */}
-      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 relative">
+      <section className="bg-black/30 rounded-2xl p-6 border-2 border-dashed border-white/10 relative my-6">
         <div className="relative w-full">
           {/* Mounting slot for wavesurfer */}
           <div 
@@ -186,7 +187,7 @@ export default function DJDeck({
       </section>
 
       {/* Separator div for DOM extractors */}
-      <div aria-hidden="true" className="h-0 leading-none">&nbsp;</div>
+      <span className="sr-only">{"\n"}---{"\n"}</span>
 
       {/* Platter & Pitch Fader Area */}
       <section className="bg-black/30 rounded-2xl p-4 border border-white/5 flex-1 flex flex-col gap-6 relative">
@@ -259,10 +260,10 @@ export default function DJDeck({
       </div>
 
         {/* Separator div for DOM extractors */}
-        <div aria-hidden="true" className="h-0 leading-none">&nbsp;</div>
+        <span className="sr-only">{"\n"}---{"\n"}</span>
 
         {/* Bottom Controls: Hot Cues, Loops, Transport */}
-        <fieldset className="mt-auto grid grid-cols-12 gap-4">
+        <fieldset className="mt-8 grid grid-cols-12 gap-4">
           <legend className="sr-only">Deck Controls</legend>
           
           {/* Hot Cues (4 pads) */}

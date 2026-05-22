@@ -60,7 +60,7 @@ function ChannelStrip({
         { label: "MID", value: state.eqMid, band: "mid" as const },
         { label: "LOW", value: state.eqLow, band: "low" as const },
       ].map(eq => (
-        <div key={eq.label} className="flex flex-col items-center w-full">
+        <div key={eq.label} className="bg-black/40 rounded-lg p-2 border border-white/5 w-full flex flex-col items-center mb-1">
           <label className="text-[9px] font-mono text-neutral-400 mb-2">&nbsp;{eq.label}&nbsp;</label>
           <input
             type="range"
@@ -75,7 +75,7 @@ function ChannelStrip({
       ))}
 
       {/* Filter Knob */}
-      <div className="flex flex-col items-center w-full pt-2 border-t border-white/5">
+      <div className="bg-black/40 rounded-lg p-2 border border-white/5 w-full flex flex-col items-center mt-2">
         <label className="text-[9px] font-mono text-neon-pink mb-2">&nbsp;FILTER&nbsp;</label>
         <input
           type="range"
@@ -225,7 +225,7 @@ export default function MixerDesk({
         <h4 className="text-[10px] flex items-center gap-1.5 font-mono text-neon-cyan">
           <Sparkles className="w-3 h-3" />&nbsp;AI&nbsp;TRANSITIONS&nbsp;
         </h4>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-3">
           {transitionPresets.map((preset) => (
             <button
               key={preset.id}
@@ -262,7 +262,7 @@ export default function MixerDesk({
       </section>
 
       {/* Crossfader */}
-      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3 pb-3" aria-label="Crossfader">
+      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3 pb-3 mt-8" aria-label="Crossfader">
         <div className="flex justify-between text-[9px] font-mono text-neutral-500">
           <span className={crossfader < 0 ? "text-neon-cyan font-bold" : ""}>&nbsp;A&nbsp;</span>
           <span>&nbsp;CROSSFADER&nbsp;</span>
