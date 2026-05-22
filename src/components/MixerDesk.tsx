@@ -53,12 +53,12 @@ function ChannelStrip({
           <ul className="flex flex-col space-y-4 list-none p-0 m-0 w-full">
             {bands.map(eq => (
               <li key={eq.label} className="w-full block">
-                <div className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full flex items-center justify-between gap-4 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
-                  <div className="w-[44px] shrink-0 block">
+                <ul className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full flex items-center justify-between gap-4 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)] list-none p-0 m-0">
+                  <li className="w-[44px] shrink-0 block">
                     <label className="text-[10px] bg-black border border-[#333] rounded px-1.5 py-1 text-neutral-400 font-bold text-center block tracking-widest shadow-inner">{eq.label}</label>
-                  </div>
+                  </li>
                   
-                  <div className="flex-1 relative h-2.5 block">
+                  <li className="flex-1 relative h-2.5 block">
                     <input
                       type="range"
                       min="-12"
@@ -69,14 +69,14 @@ function ChannelStrip({
                       className={`absolute inset-0 w-full h-full bg-black accent-${color.replace('neon-', '')}-500 rounded-full appearance-none cursor-pointer outline-none shadow-[inset_0_2px_5px_rgba(0,0,0,0.8)] block z-10`}
                     />
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-4 bg-white/20" />
-                  </div>
+                  </li>
 
-                  <div className="w-[44px] shrink-0 block">
+                  <li className="w-[44px] shrink-0 block">
                     <span className={`text-[11px] font-mono text-white text-center font-bold block rounded border py-1 shadow-[0_2px_5px_rgba(0,0,0,0.5)] w-full ${eq.value === 0 ? 'bg-[#1a1a20] border-[#333] text-neutral-400' : 'bg-gradient-to-b from-[#222] to-black border-[#444]'}`}>
                       {eq.value > 0 ? '+' : ''}{eq.value}
                     </span>
-                  </div>
-                </div>
+                  </li>
+                </ul>
               </li>
             ))}
           </ul>
@@ -157,8 +157,8 @@ export default function MixerDesk({
       <section className="grid grid-cols-2 gap-6 relative mb-8">
         
         {/* Master Volume Block */}
-        <div className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
-          <div className="block w-full">
+        <ul className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4 list-none m-0">
+          <li className="block w-full">
             <header className="flex justify-between items-center bg-[#111115] px-5 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
               <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-2 tracking-[0.1em]">
                 <Volume2 className="w-4 h-4 text-neutral-400" /> MASTER
@@ -169,9 +169,9 @@ export default function MixerDesk({
                 </span>
               )}
             </header>
-          </div>
+          </li>
           
-          <div className="block w-full flex-1 flex flex-col justify-center px-2 py-4">
+          <li className="block w-full flex-1 flex flex-col justify-center px-2 py-4">
             <input
               type="range"
               min="0"
@@ -185,16 +185,16 @@ export default function MixerDesk({
                 WebkitAppearance: 'none'
               }}
             />
-          </div>
+          </li>
           
-          <div className="block w-full text-center mt-2">
+          <li className="block w-full text-center mt-2">
             <div className="bg-gradient-to-b from-[#222] to-black border border-[#444] shadow-[0_4px_10px_rgba(0,0,0,0.8)] rounded-full px-5 py-1.5 inline-flex items-center justify-center min-w-[80px]">
               <span className="text-[11px] font-mono text-white font-bold tracking-widest block whitespace-nowrap">
                 {"VOL " + (masterVolume * 100).toFixed(0) + "%"}
               </span>
             </div>
-          </div>
-        </div>
+          </li>
+        </ul>
         
         {/* FX Toggles Block */}
         <article className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
