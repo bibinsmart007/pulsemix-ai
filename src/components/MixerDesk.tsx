@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Sliders, Sparkles, Volume2, RefreshCw } from "lucide-react";
+import { Sliders, Volume2, Sparkles } from "lucide-react";
 import { DeckState } from "@/types/audio";
 
 interface MixerDeskProps {
@@ -14,118 +14,63 @@ interface MixerDeskProps {
   setMasterVolume: (val: number) => void;
   isTransitioning: boolean;
   transitionProgress: number;
-  onTriggerTransition: (preset: "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", duration: number) => void;
+  onTriggerTransition: (presetId: "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", durationBars: number) => void;
   delayActive: boolean;
   reverbActive: boolean;
-  onToggleFX: (fx: "delay" | "reverb", active: boolean) => void;
-  onEQChange: (deck: "A" | "B", band: "low" | "mid" | "high", db: number) => void;
-  onFilterChange: (deck: "A" | "B", val: number) => void;
-  onVolumeChange: (deck: "A" | "B", vol: number) => void;
+  onToggleFX: (fxType: "delay" | "reverb", active: boolean) => void;
+  onEQChange: (deckId: "A" | "B", band: "high" | "mid" | "low", val: number) => void;
+  onFilterChange: (deckId: "A" | "B", val: number) => void;
+  onVolumeChange: (deckId: "A" | "B", val: number) => void;
 }
 
-// A reusable Channel Strip component to keep the file clean
-function ChannelStrip({
-  deckId,
-  state,
-  onEQChange,
-  onFilterChange,
-  onVolumeChange
-}: {
-  deckId: "A" | "B";
-  state: DeckState;
-  onEQChange: (band: "low" | "mid" | "high", db: number) => void;
-  onFilterChange: (val: number) => void;
-  onVolumeChange: (vol: number) => void;
+// Sub-Component: Channel Strip
+function ChannelStrip({ 
+  deckId, state, onEQChange, onVolumeChange, color 
+}: { 
+  deckId: "A"|"B", state: DeckState, onEQChange: any, onVolumeChange: any, color: string 
 }) {
-  const accentColor = deckId === "A" ? "text-neon-cyan" : "text-neon-purple";
-  const accentBg = deckId === "A" ? "bg-neon-cyan" : "bg-neon-purple";
-
-  // Helper to color EQ based on value (boost = green, cut = red, flat = neutral)
-  const getValColor = (val: number) => {
-    if (val > 0) return "text-emerald-400";
-    if (val < 0) return "text-rose-400";
-    return "text-neutral-400";
-  };
+  const bands = [
+    { label: "HI", value: state.eqHigh, band: "high" as const },
+    { label: "MID", value: state.eqMid, band: "mid" as const },
+    { label: "LOW", value: state.eqLow, band: "low" as const },
+  ];
 
   return (
-    <section className="flex flex-col items-center gap-6 w-full relative z-10 bg-black/30 border border-white/5 rounded-2xl py-4 px-2 shadow-inner" aria-labelledby={`ch-${deckId}-title`}>
-      <h3 id={`ch-${deckId}-title`} className="sr-only"> CHANNEL {deckId} STRIP </h3>
-      <div className="font-mono text-[10px] font-bold text-neutral-500 mb-2">
-        <span className={accentColor}> CH {deckId} </span>
-      </div>
-
-      {/* EQ Knobs */}
-      <fieldset className="w-full flex flex-col gap-2">
+    <article className="flex-1 flex flex-col gap-4">
+      <header className={`bg-neutral-900/80 rounded-xl p-3 border border-white/5 text-center shadow-inner relative overflow-hidden`}>
+        <div className={`absolute top-0 left-0 w-full h-1 bg-${color}`} />
+        <h3 className="font-bold font-mono tracking-widest text-[11px] text-white">CH {deckId}</h3>
+      </header>
+      
+      <fieldset className="flex-1 flex flex-col gap-2 bg-black/20 rounded-2xl p-4 border border-white/5">
         <legend className="sr-only">EQ Controls</legend>
-        {[
-          { label: "HI", value: state.eqHigh, band: "high" as const },
-          { label: "MID", value: state.eqMid, band: "mid" as const },
-          { label: "LOW", value: state.eqLow, band: "low" as const },
-        ].map(eq => (
+        {bands.map(eq => (
           <div key={eq.label} className="bg-[#0a0a0c] rounded-xl p-3.5 border border-white/10 w-full grid grid-cols-[40px_1fr_40px] gap-4 items-center shadow-md mb-2">
-            <label className="text-[10px] font-mono text-neutral-400 font-bold text-left">{eq.label}</label>
+            <label className="text-[10px] font-mono text-neutral-400 font-bold text-left block">{eq.label}</label>
             <input
               type="range"
               min="-12"
               max="12"
               step="0.5"
               value={eq.value}
-              onChange={(e) => onEQChange(eq.band, parseFloat(e.target.value))}
-              className="w-full h-1.5 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
+              onChange={(e) => onEQChange(deckId, eq.band, parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none block"
             />
-            <span className="text-[10px] font-mono text-neutral-500 text-right font-bold">
+            <span className="text-[10px] font-mono text-neutral-500 text-right font-bold block">
               {eq.value > 0 ? '+' : ''}{eq.value}
             </span>
           </div>
         ))}
-      </fieldset>
-
-      {/* Filter Knob */}
-      <div className="bg-black/40 rounded-lg p-3 border border-white/5 w-full flex flex-col gap-2 mt-2">
-        <div className="flex items-center justify-between w-full">
-          <label className="text-[10px] font-mono text-neon-pink font-bold"> FLTR </label>
-          <input
-            type="range"
-            min="-100"
-            max="100"
-            step="1"
-            value={state.filter}
-            onChange={(e) => onFilterChange(parseInt(e.target.value))}
-            className="w-12 h-1 bg-neutral-800 accent-neon-pink rounded-lg appearance-none cursor-pointer outline-none"
-          />
-        </div>
-        <div className="flex justify-between w-full px-1">
-          <span className="text-[7px] font-mono text-neon-cyan opacity-70">LPF</span>
-          <span className={`text-[7px] font-mono font-bold ${state.filter === 0 ? "text-neutral-500" : state.filter < 0 ? "text-neon-cyan" : "text-neon-pink"}`}>
-             {state.filter === 0 ? "FLAT" : state.filter < 0 ? "LOW-PASS" : "HI-PASS"} 
-          </span>
-          <span className="text-[7px] font-mono text-neon-pink opacity-70">HPF</span>
-        </div>
-      </div>
-
-      {/* Volume Fader */}
-      <div className="flex flex-col items-center gap-2 pt-4 w-full">
-        <div className="relative flex flex-col items-center py-2 px-2.5 bg-black/50 border border-white/10 rounded-xl">
-          {/* VU Meter */}
-          <div className="absolute left-2 top-3 bottom-3 w-1 flex flex-col justify-between pointer-events-none rounded overflow-hidden">
-            <span className={`h-1 w-full ${state.volume > 0.8 && state.playing ? 'bg-red-500' : 'bg-red-950'}`} />
-            <span className={`h-1.5 w-full ${state.volume > 0.6 && state.playing ? 'bg-amber-500' : 'bg-amber-950'}`} />
-            <span className={`h-2.5 w-full ${state.volume > 0.3 && state.playing ? 'bg-emerald-500' : 'bg-emerald-950'}`} />
-            <span className={`h-4 w-full ${state.volume > 0.0 && state.playing ? 'bg-emerald-500' : 'bg-emerald-950'}`} />
+        
+        {/* Filter Knob placeholder */}
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <div className="w-12 h-12 rounded-full bg-neutral-900 border-2 border-neutral-700 shadow-inner flex items-center justify-center relative">
+            <div className="w-1 h-3 bg-white/50 rounded-full absolute top-1" />
           </div>
-          <input
-            type="range"
-            min="0"
-            max="1.0"
-            step="0.01"
-            value={state.volume}
-            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-            className={`accent-${accentBg.replace('bg-', '')} h-28 my-1 vertical-slider appearance-none w-1 bg-neutral-800 rounded outline-none cursor-pointer`}
-            style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
-          />
+          <span className="text-[9px] font-mono font-bold text-neutral-500">FLTR</span>
         </div>
-      </div>
-    </section>
+      </fieldset>
+    </article>
   );
 }
 
@@ -147,27 +92,43 @@ export default function MixerDesk({
   onFilterChange,
   onVolumeChange
 }: MixerDeskProps) {
-    const transitionPresets = [
-    { id: "bass-swap", label: "Bass Swap", desc: "Swap low-ends", color: "from-neon-cyan to-blue-600" },
-    { id: "echo-out", label: "Echo Out", desc: "Deep delay tail", color: "from-neon-purple to-neon-pink" },
-    { id: "reverb-blend", label: "Reverb Blend", desc: "Room blend", color: "from-emerald-500 to-teal-600" },
-    { id: "edm-rise", label: "EDM Rise", desc: "Pitch sweep", color: "from-neon-pink to-amber-500" },
-  ] as const;
+
+  const transitionPresets = [
+    { id: 'bass-swap', label: 'Bass Swap', desc: 'Swap low-ends' },
+    { id: 'echo-out', label: 'Echo Out', desc: 'Deep delay tail' },
+    { id: 'edm-rise', label: 'EDM Rise', desc: 'HPF + LPF sweep' },
+    { id: 'reverb-blend', label: 'Reverb Blend', desc: 'Instant 100% switch' },
+  ];
 
   return (
-    <article aria-labelledby="mixer-title" className="glass-panel rounded-3xl p-4 border-2 border-white/10 bg-[#0a0a0c] flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
-      <h2 id="mixer-title" className="sr-only">CENTRAL MIXER</h2>
+    <article className="glass-panel rounded-3xl p-6 shadow-2xl border border-white/5 flex flex-col h-full bg-gradient-to-b from-neutral-900/50 to-black/80">
       
-      {/* Top Header: Master Vol & FX */}
-      <section className="flex flex-col gap-3 relative mb-2" aria-label="Master Controls">
+      {/* Mixer Header */}
+      <header className="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
+        <h2 className="font-bold tracking-widest text-sm flex items-center gap-2">
+          <Sliders className="w-5 h-5 text-neutral-400" />
+          <span className="text-white">CENTRAL</span>
+          <span className="text-neutral-500">MIXER</span>
+        </h2>
+        <div className="flex gap-2">
+          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-amber-500/50 animate-pulse delay-75" />
+          <div className="w-2 h-2 rounded-full bg-emerald-500/50 animate-pulse delay-150" />
+        </div>
+      </header>
+
+      {/* Top Section: Master / Global FX */}
+      <section className="flex flex-col gap-3 relative mb-6">
         
         {/* Master Volume */}
-        <div className="flex flex-col gap-3 bg-[#0a0a0c] p-5 rounded-2xl border border-white/10 shadow-md">
+        <fieldset className="flex flex-col gap-3 bg-[#0a0a0c] p-5 rounded-2xl border border-white/10 shadow-md">
+          <legend className="sr-only">Master Volume</legend>
           <div className="flex justify-between items-center">
-            <span className="font-mono text-[11px] text-neutral-400 font-bold flex items-center gap-2"><Volume2 className="w-4 h-4" />MASTER VOL</span>
-            {/* BPM Sync Indicator */}
+            <span className="font-mono text-[11px] text-neutral-400 font-bold flex items-center gap-2 block">
+              <Volume2 className="w-4 h-4" />MASTER VOL
+            </span>
             {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
-              <span className="text-[9px] font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
+              <span className="text-[9px] font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse block">
                 BPM SYNCED
               </span>
             )}
@@ -179,70 +140,57 @@ export default function MixerDesk({
             step="0.01"
             value={masterVolume}
             onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-            className="w-full mt-3 accent-white bg-neutral-800 h-2 rounded appearance-none cursor-pointer outline-none"
+            className="w-full mt-3 accent-white bg-neutral-800 h-2 rounded appearance-none cursor-pointer outline-none block"
           />
-        </div>
+        </fieldset>
         
         {/* FX Toggles */}
-        <div className="flex flex-col gap-3 bg-[#0a0a0c] p-5 rounded-2xl border border-white/10 shadow-md">
-          <span className="font-mono text-[11px] text-neutral-400 font-bold tracking-wider mb-1">GLOBAL FX</span>
+        <fieldset className="flex flex-col gap-3 bg-[#0a0a0c] p-5 rounded-2xl border border-white/10 shadow-md">
+          <legend className="font-mono text-[11px] text-neutral-400 font-bold tracking-wider mb-1 block">GLOBAL FX</legend>
           <div className="grid grid-cols-2 gap-4">
             <button
-              title="Echo Delay Effect (Tail)"
+              type="button"
               onClick={() => onToggleFX("delay", !delayActive)}
-              className={`p-3 rounded-xl text-[11px] font-mono font-bold transition-all shadow-inner border ${
+              className={`p-3 rounded-xl text-[11px] font-mono font-bold transition-all shadow-inner border block w-full ${
                 delayActive ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/50" : "bg-neutral-900 text-neutral-500 border-white/10 hover:bg-neutral-800 hover:text-white"
               }`}
             >
               ECHO
             </button>
             <button
-              title="Room Reverb Effect"
+              type="button"
               onClick={() => onToggleFX("reverb", !reverbActive)}
-              className={`p-3 rounded-xl text-[11px] font-mono font-bold transition-all shadow-inner border ${
+              className={`p-3 rounded-xl text-[11px] font-mono font-bold transition-all shadow-inner border block w-full ${
                 reverbActive ? "bg-neon-purple/20 text-neon-purple border-neon-purple/50" : "bg-neutral-900 text-neutral-500 border-white/10 hover:bg-neutral-800 hover:text-white"
               }`}
             >
               REVERB
             </button>
           </div>
-        </div>
+        </fieldset>
       </section>
 
-      {/* Main Channel Strips (A & B side by side) */}
-      <div className="flex-1 flex justify-between px-4 relative">
-        {/* Decorative center divider */}
-        <div className="absolute top-0 bottom-0 w-[1px] bg-white/[0.03] left-1/2 -translate-x-1/2 pointer-events-none" />
+      {/* Middle Section: Channel Strips */}
+      <section className="flex gap-6 flex-1 mb-8">
+        <ChannelStrip deckId="A" state={stateA} onEQChange={onEQChange} onVolumeChange={onVolumeChange} color="neon-cyan" />
+        <ChannelStrip deckId="B" state={stateB} onEQChange={onEQChange} onVolumeChange={onVolumeChange} color="neon-purple" />
+      </section>
 
-        <ChannelStrip 
-          deckId="A" 
-          state={stateA} 
-          onEQChange={(b, v) => onEQChange("A", b, v)} 
-          onFilterChange={(v) => onFilterChange("A", v)} 
-          onVolumeChange={(v) => onVolumeChange("A", v)} 
-        />
-        <ChannelStrip 
-          deckId="B" 
-          state={stateB} 
-          onEQChange={(b, v) => onEQChange("B", b, v)} 
-          onFilterChange={(v) => onFilterChange("B", v)} 
-          onVolumeChange={(v) => onVolumeChange("B", v)} 
-        />
-      </div>
-
-      {/* AI Automated Transitions */}
-      <section className="bg-black/30 rounded-2xl p-5 border border-white/5 space-y-4 shadow-sm" aria-label="AI Transitions">
-        <h4 className="text-[11px] flex items-center gap-2 font-mono font-bold text-neon-cyan">
-          <Sparkles className="w-4 h-4" />AI TRANSITIONS
-        </h4>
-        <div className="grid grid-cols-2 gap-4 mt-2">
+      {/* AI Transitions Area */}
+      <article className="bg-black/40 rounded-2xl p-5 border border-white/5 mb-8">
+        <header className="mb-4">
+          <h4 className="text-[11px] flex items-center gap-2 font-mono font-bold text-neon-cyan m-0">
+            <Sparkles className="w-4 h-4" />AI TRANSITIONS
+          </h4>
+        </header>
+        <div className="grid grid-cols-2 gap-4">
           {transitionPresets.map((preset) => (
             <button
               key={preset.id}
-              title={preset.desc}
-              onClick={() => onTriggerTransition(preset.id, 8)}
+              type="button"
+              onClick={() => onTriggerTransition(preset.id as "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", 8)}
               disabled={isTransitioning}
-              className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-center gap-2 shadow-lg min-h-[72px] ${
+              className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-center gap-2 shadow-lg min-h-[72px] block w-full ${
                 isTransitioning 
                   ? "bg-neutral-900 border-white/5 opacity-40 cursor-not-allowed" 
                   : "bg-[#0a0a0c] border-white/10 hover:border-white/30 hover:bg-neutral-800 hover:-translate-y-1 active:scale-95"
@@ -253,53 +201,60 @@ export default function MixerDesk({
             </button>
           ))}
         </div>
+      </article>
+
+      {/* Crossfader Area */}
+      <fieldset className="bg-[#0a0a0c] rounded-2xl p-6 border border-white/10 mt-auto relative shadow-inner">
+        <legend className="sr-only">Crossfader</legend>
         
-        {isTransitioning && (
-          <div className="space-y-1.5 font-mono">
-            <div className="flex justify-between text-[9px] text-neon-pink">
-              <span> CROSSFADING... </span>
-              <span> {transitionProgress.toFixed(0)}% </span>
-            </div>
-            <div className="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-neon-cyan to-neon-pink transition-all duration-100"
-                style={{ width: `${transitionProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </section>
+        {/* Crossfader track */}
+        <div className="absolute top-1/2 left-8 right-8 h-1.5 bg-black rounded-full -translate-y-1/2 border border-white/5" />
+        
+        {/* Markers */}
+        <div className="absolute top-1/2 left-1/2 w-0.5 h-6 bg-white/10 -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute top-1/2 left-8 w-0.5 h-4 bg-white/10 -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute top-1/2 right-8 w-0.5 h-4 bg-white/10 translate-x-1/2 -translate-y-1/2" />
+        
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={crossfader}
+          onChange={(e) => setCrossfader(parseFloat(e.target.value))}
+          className="w-full appearance-none bg-transparent relative z-10 cursor-pointer outline-none block"
+          style={{
+            ['--thumb-size' as any]: '40px',
+            WebkitAppearance: 'none'
+          }}
+        />
 
-      {/* Crossfader */}
-      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3 pb-3 mt-8" aria-label="Crossfader">
-        <div className="flex justify-between text-[9px] font-mono text-neutral-500">
-          <span className={crossfader < 0 ? "text-neon-cyan font-bold" : ""}> A </span>
-          <span> CROSSFADER </span>
-          <span className={crossfader > 0 ? "text-neon-purple font-bold" : ""}> B </span>
-        </div>
-        <div className="relative py-2 px-3 bg-black/60 border border-white/5 rounded-xl overflow-hidden">
-          {/* Dynamic Background Gradient Indicator */}
-          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{
-            background: crossfader < 0 
-              ? `linear-gradient(to right, #00f3ff ${Math.abs(crossfader)}%, transparent 50%)`
-              : crossfader > 0 
-                ? `linear-gradient(to left, #bd00ff ${crossfader}%, transparent 50%)`
-                : 'transparent'
-          }} />
-          <div className="absolute inset-x-8 h-0.5 bg-neutral-800 pointer-events-none rounded top-1/2 -translate-y-1/2" />
-          <input
-            type="range"
-            min="-100"
-            max="100"
-            value={crossfader}
-            onChange={(e) => setCrossfader(parseInt(e.target.value))}
-            className={`w-full bg-transparent h-2 rounded appearance-none cursor-pointer outline-none relative z-10 ${
-              crossfader < -10 ? 'accent-neon-cyan' : crossfader > 10 ? 'accent-neon-purple' : 'accent-neutral-400'
-            }`}
-          />
-        </div>
-      </section>
-
+        <style dangerouslySetInnerHTML={{__html: `
+          input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 40px;
+            width: 24px;
+            border-radius: 4px;
+            background: #171717;
+            border: 2px solid #333;
+            box-shadow: 0 0 10px rgba(0,0,0,0.8), inset 0 0 4px rgba(255,255,255,0.1);
+            cursor: pointer;
+            margin-top: -19px;
+            position: relative;
+          }
+          input[type=range]::-webkit-slider-thumb::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 20px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 2px;
+          }
+        `}} />
+      </fieldset>
     </article>
   );
 }

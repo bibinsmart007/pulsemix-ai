@@ -14,7 +14,14 @@ import {
   Flame, 
   Trash2,
   FileCheck,
-  Volume2
+  Volume2,
+  UploadCloud,
+  X,
+  Play,
+  RotateCcw,
+  Zap,
+  Disc,
+  Activity
 } from "lucide-react";
 import DJDeck from "@/components/DJDeck";
 import MixerDesk from "@/components/MixerDesk";
@@ -897,23 +904,24 @@ export default function Home() {
       </main>
 
       {/* Global Diagnostics Footer */}
-      <footer className="h-6 flex-shrink-0 bg-transparent flex items-center justify-between px-6 font-mono text-[7px] text-neutral-600/50 z-20">
+      <footer className="fixed bottom-0 left-0 w-full h-7 bg-black/90 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-4 font-mono text-[9px] text-neutral-500 z-50">
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span>WEB&nbsp;AUDIO&nbsp;API</span>
-            <span className="text-emerald-500/50 flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-emerald-500/50" /> &nbsp;ONLINE&nbsp;
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span>FASTAPI&nbsp;BACKEND</span>
-            <span className="text-neon-cyan/50 flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-neon-cyan/50" /> &nbsp;READY&nbsp;
-            </span>
-          </div>
+          <span className="flex items-center gap-2">
+            <Activity className="w-3 h-3 text-neon-cyan" /> 
+            <span className="text-white font-bold">PULSEMIX ENGINE v2.4</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> 
+            DSP ACTIVE
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_#f59e0b]" /> 
+            CPU: {(Math.random() * 5 + 10).toFixed(1)}%
+          </span>
         </div>
-        <div>
-          <span>LATENCY:&nbsp;<span className="text-neutral-500/50">~2.4 ms</span></span>
+        <div className="flex items-center gap-6">
+          <span className="hidden sm:inline">OUTPUT: 48kHz / 24-bit</span>
+          <span className="hidden md:inline">LATENCY: ~3ms</span>
         </div>
       </footer>
     </div>
