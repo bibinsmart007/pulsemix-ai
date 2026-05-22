@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, Zap, Disc } from "lucide-react";
 import { DeckState } from "@/types/audio";
 
 interface DJDeckProps {
   deckId: "A" | "B";
   state: DeckState;
+  audioElem: HTMLAudioElement | null;
   onPlay: () => void;
   onPause: () => void;
   onSeek: (seconds: number) => void;
@@ -224,7 +225,7 @@ function ControlsCard({
 }
 
 export default function DJDeck({
-  deckId, state, onPlay, onPause, onSeek, onBpmChange, onPitchChange,
+  deckId, state, audioElem, onPlay, onPause, onSeek, onBpmChange, onPitchChange,
   onSync, onVinylStop, onSetHotCue, onTriggerHotCue, onToggleLoop, onFileDrop
 }: DJDeckProps) {
   const [isDragging, setIsDragging] = React.useState(false);
@@ -232,6 +233,80 @@ export default function DJDeck({
   const accentColor = isA ? "text-neon-cyan" : "text-neon-purple";
   const glowBorderClass = isA ? "focus-within:border-neon-cyan/40" : "focus-within:border-neon-purple/40";
   const accentBg = isA ? "bg-neon-cyan" : "bg-neon-purple";
+  const waveColor = isA ? "rgba(0, 243, 255, 0.15)" : "rgba(189, 0, 255, 0.15)";
+  const progressColor = isA ? "rgba(0, 243, 255, 0.8)" : "rgba(189, 0, 255, 0.8)";
+  const cursorColor = isA ? "#00f3ff" : "#bd00ff";
+
+  const wavesurferRef = useRef<any>(null);
+  const regionsPluginRef = useRef<any>(null);
+
+  // Initialize and update Wavesurfer instance
+  useEffect(() => {
+    if (typeof window === "undefined" || !state.trackLoaded || !audioElem) return;
+
+    let ws: any = null;
+    let regions: any = null;
+    
+    const container = document.querySelector(`#waveform-${deckId}`);
+    if (container) {
+      container.innerHTML = ""; // Clear
+      
+      Promise.all([
+        import("wavesurfer.js"),
+        import("wavesurfer.js/dist/plugins/regions.esm.js")
+      ]).then(([WaveSurfer, RegionsPlugin]) => {
+        regions = RegionsPlugin.default.create();
+        regionsPluginRef.current = regions;
+        
+        ws = WaveSurfer.default.create({
+          container: `#waveform-${deckId}`,
+          media: audioElem,
+          waveColor: waveColor,
+          progressColor: progressColor,
+          cursorColor: cursorColor,
+          cursorWidth: 2,
+          height: 94, // slightly less than container h-24
+          barWidth: 2,
+          barGap: 1.5,
+          interact: true,
+          plugins: [regions],
+        });
+        
+        ws.on('interaction', (newTime: number) => {
+          onSeek(newTime);
+        });
+        
+        wavesurferRef.current = ws;
+      });
+    }
+
+    return () => {
+      if (ws) ws.destroy();
+    };
+  }, [state.trackLoaded, audioElem, deckId, waveColor, progressColor, cursorColor]);
+
+  // Sync Hot Cues to Regions
+  useEffect(() => {
+    if (!regionsPluginRef.current || !state.hotCues) return;
+    
+    const regions = regionsPluginRef.current;
+    regions.clearRegions();
+    
+    const cueColors = ["rgba(225, 29, 72, 0.5)", "rgba(37, 99, 235, 0.5)", "rgba(217, 119, 6, 0.5)", "rgba(16, 185, 129, 0.5)"];
+    
+    state.hotCues.forEach((time, i) => {
+      if (time !== null) {
+        regions.addRegion({
+          start: time,
+          end: time + 0.1, // tiny duration just for visual marker
+          color: cueColors[i],
+          drag: false,
+          resize: false,
+          content: `Q${i + 1}`,
+        });
+      }
+    });
+  }, [state.hotCues]);
 
   const handleSeekSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSeek(parseFloat(e.target.value));
@@ -332,12 +407,6 @@ export default function DJDeck({
               </div>
             )}
           </div>
-          {state.trackLoaded && !state.loading && (
-            <input 
-              type="range" min="0" max={state.duration || 100} step="0.1" value={state.currentTime} onChange={handleSeekSlider}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-15"
-            />
-          )}
         </div>
       </article>
 

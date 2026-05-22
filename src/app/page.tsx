@@ -40,10 +40,6 @@ export default function Home() {
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [renderStatus, setRenderStatus] = useState<string>("idle"); // idle, rendering, finished
   const [exportedFileUrl, setExportedFileUrl] = useState<string>("");
-  
-  // Wavesurfer refs
-  const wavesurferARef = useRef<any>(null);
-  const wavesurferBRef = useRef<any>(null);
 
   // Load preset track list from backend on mount
   useEffect(() => {
@@ -66,68 +62,6 @@ export default function Home() {
         ]);
       });
   }, []);
-
-  // Initialize and update Wavesurfer instance A
-  useEffect(() => {
-    if (typeof window === "undefined" || !engine.deckA.trackLoaded || !engine.audioElemA) return;
-
-    let wsA: any = null;
-    const container = document.querySelector("#waveform-A");
-    if (container) {
-      container.innerHTML = ""; // Clear
-      import("wavesurfer.js").then((WaveSurfer) => {
-        wsA = WaveSurfer.default.create({
-          container: "#waveform-A",
-          media: engine.audioElemA as HTMLAudioElement,
-          waveColor: "rgba(0, 243, 255, 0.15)",
-          progressColor: "rgba(0, 243, 255, 0.8)",
-          cursorColor: "#00f3ff",
-          cursorWidth: 2,
-          height: 48,
-          barWidth: 2,
-          barGap: 1.5,
-          interact: false,
-        });
-        
-        wavesurferARef.current = wsA;
-      });
-    }
-
-    return () => {
-      if (wsA) wsA.destroy();
-    };
-  }, [engine.deckA.trackLoaded, engine.audioElemA]);
-
-  // Initialize and update Wavesurfer instance B
-  useEffect(() => {
-    if (typeof window === "undefined" || !engine.deckB.trackLoaded || !engine.audioElemB) return;
-
-    let wsB: any = null;
-    const container = document.querySelector("#waveform-B");
-    if (container) {
-      container.innerHTML = ""; // Clear
-      import("wavesurfer.js").then((WaveSurfer) => {
-        wsB = WaveSurfer.default.create({
-          container: "#waveform-B",
-          media: engine.audioElemB as HTMLAudioElement,
-          waveColor: "rgba(189, 0, 255, 0.15)",
-          progressColor: "rgba(189, 0, 255, 0.8)",
-          cursorColor: "#bd00ff",
-          cursorWidth: 2,
-          height: 48,
-          barWidth: 2,
-          barGap: 1.5,
-          interact: false,
-        });
-        
-        wavesurferBRef.current = wsB;
-      });
-    }
-
-    return () => {
-      if (wsB) wsB.destroy();
-    };
-  }, [engine.deckB.trackLoaded, engine.audioElemB]);
 
   // Note: Wavesurfer auto-syncs with the HTMLAudioElement passed via the `media` config.
   // We don't need manual sync loops anymore!
@@ -386,6 +320,7 @@ export default function Home() {
                   <DJDeck 
                     deckId="A" 
                     state={engine.deckA}
+                    audioElem={engine.audioElemA}
                     onPlay={() => engine.playDeck("A")}
                     onPause={() => engine.pauseDeck("A")}
                     onSeek={(sec) => engine.seekDeck("A", sec)}
@@ -430,6 +365,7 @@ export default function Home() {
                   <DJDeck 
                     deckId="B" 
                     state={engine.deckB}
+                    audioElem={engine.audioElemB}
                     onPlay={() => engine.playDeck("B")}
                     onPause={() => engine.pauseDeck("B")}
                     onSeek={(sec) => engine.seekDeck("B", sec)}
