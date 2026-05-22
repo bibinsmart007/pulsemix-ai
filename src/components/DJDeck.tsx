@@ -96,17 +96,17 @@ function PitchCard({ pitch, onPitchChange, accentBg }: { pitch: number, onPitchC
           </div>
         </li>
         
-        <li className="w-full flex justify-center block mt-2">
+        <li className="w-full flex justify-center block mt-3">
           <button 
             type="button"
             onClick={() => onPitchChange(0)}
-            className={`w-full py-1.5 rounded bg-[#0a0a0c] text-[10px] font-mono font-bold transition-all border border-[#222] shadow-[0_2px_5px_rgba(0,0,0,0.8)] block ${
+            className={`w-[80%] py-1.5 rounded-full text-[9px] font-mono font-bold transition-all border-[2px] shadow-[0_4px_10px_rgba(0,0,0,0.8)] block active:scale-95 ${
               pitch === 0 
-                ? "text-neutral-500 shadow-inner" 
-                : "text-white hover:bg-neutral-800 active:scale-95"
+                ? "bg-[#111] text-neutral-600 border-[#222] shadow-inner" 
+                : "bg-gradient-to-b from-[#222] to-black text-white hover:border-white/40 border-[#444]"
             }`}
           >
-            0% RESET
+            RESET
           </button>
         </li>
       </ul>
