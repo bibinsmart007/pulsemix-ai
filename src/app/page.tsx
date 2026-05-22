@@ -331,16 +331,14 @@ export default function Home() {
               <button
                 key={tab.id}
                 onClick={() => engine.setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-medium tracking-wide transition-all rounded-t-lg relative border-b-2 ${
+                className={`flex items-center gap-2 px-4 py-1.5 text-xs font-medium tracking-wide transition-all rounded-full border ${
                   isActive
-                    ? "text-neon-cyan border-neon-cyan bg-white/[0.03]"
-                    : "text-neutral-400 border-transparent hover:text-neutral-200 hover:bg-white/[0.01]"
+                    ? "text-neon-cyan border-neon-cyan/50 bg-neon-cyan/10"
+                    : "text-neutral-400 border-white/5 bg-white/5 hover:text-neutral-200 hover:bg-white/10"
                 }`}
               >
                 <Icon className={`w-3.5 h-3.5 ${isActive ? "text-neon-cyan" : "text-neutral-500"}`} />
-                <span className="sr-only"> </span>
-                <span>{tab.label}</span>
-                <span className="sr-only"> </span>
+                <span>&nbsp;{tab.label}&nbsp;</span>
               </button>
             );
           })}
@@ -899,23 +897,23 @@ export default function Home() {
       </main>
 
       {/* Global Diagnostics Footer */}
-      <footer className="h-6 flex-shrink-0 bg-transparent border-t border-white/5 flex items-center justify-between px-6 font-mono text-[8px] text-neutral-600/70 z-20">
+      <footer className="h-6 flex-shrink-0 bg-transparent flex items-center justify-between px-6 font-mono text-[7px] text-neutral-600/50 z-20">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <span>WEB AUDIO API</span>
-            <span className="text-emerald-500/70 flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-emerald-500/70" /> ONLINE
+            <span>WEB&nbsp;AUDIO&nbsp;API</span>
+            <span className="text-emerald-500/50 flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-emerald-500/50" /> &nbsp;ONLINE&nbsp;
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span>FASTAPI BACKEND</span>
-            <span className="text-neon-cyan/70 flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-neon-cyan/70" /> READY
+            <span>FASTAPI&nbsp;BACKEND</span>
+            <span className="text-neon-cyan/50 flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-neon-cyan/50" /> &nbsp;READY&nbsp;
             </span>
           </div>
         </div>
         <div>
-          <span>LATENCY: <span className="text-neutral-500/70">~2.4 ms</span></span>
+          <span>LATENCY:&nbsp;<span className="text-neutral-500/50">~2.4 ms</span></span>
         </div>
       </footer>
     </div>

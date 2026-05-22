@@ -96,33 +96,47 @@ export default function DJDeck({
       <div className={`absolute top-0 ${isA ? 'left-6' : 'right-6'} w-24 h-[1px] bg-gradient-to-r from-transparent via-${isA ? 'neon-cyan' : 'neon-purple'}/50 to-transparent`} />
 
       {/* Deck Header: Title & Time */}
-      <div className="flex justify-between items-start gap-4">
-        <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`w-2 h-2 rounded-full ${state.playing ? 'animate-pulse' : ''} ${accentBg}`} />
-            <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">
-              Deck {deckId} <span className="text-neutral-600 px-1">•</span> {state.genre || 'No Genre'}
-            </p>
+      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 flex flex-col gap-2 relative">
+        <div className="flex justify-between items-start gap-4">
+          <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`w-2 h-2 rounded-full ${state.playing ? 'animate-pulse' : ''} ${accentBg}`} />
+              <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">
+                Deck&nbsp;{deckId} <span className="text-neutral-600 px-1">•</span> {state.genre || 'No Genre'}
+              </p>
+            </div>
+            
+            <h3 className="font-bold text-lg tracking-wide truncate text-white" title={state.title}>
+              {state.loading ? "Loading track..." : state.title || "No Track Loaded"}
+            </h3>
           </div>
-          
-          <h3 className="font-bold text-lg tracking-wide truncate text-white mb-2" title={state.title}>
-            {state.loading ? "Loading track..." : state.title || "No Track Loaded"}
-          </h3>
-          
-          <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono mt-auto bg-black/40 border border-white/5 px-3 py-1.5 rounded w-full">
-            <span>KEY: <b className="text-white ml-1">{state.key || '--'}</b></span>
-            <span className="text-neutral-600">|</span>
-            <span>BPM: <b className="text-white ml-1">{state.bpm ? state.bpm.toFixed(1) : '--'}</b></span>
-            <span className="text-neutral-600">|</span>
-            <span>
-              TIME: <b className={`ml-1 ${accentColor}`}>{formatTime(state.currentTime)}</b> <span className="text-neutral-500">/ {formatTime(state.duration)}</span>
-            </span>
+
+          <div className="text-right flex-shrink-0">
+            <div className={`text-3xl font-light font-mono ${accentColor}`}>
+              {formatTime(state.currentTime)}
+            </div>
+            <div className="text-[10px] text-neutral-500 font-mono tracking-wider">
+              -{formatTime(Math.max(0, state.duration - state.currentTime))}
+            </div>
           </div>
         </div>
-      </div>
+
+        {/* Separator div for DOM extractors */}
+        <div aria-hidden="true" className="h-0 leading-none">&nbsp;</div>
+
+        <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-3 py-1.5 rounded w-full mt-1">
+          <span>KEY:&nbsp;<b className="text-white">{state.key || '--'}</b></span>
+          <span className="text-neutral-600">&nbsp;|&nbsp;</span>
+          <span>BPM:&nbsp;<b className="text-white">{state.bpm ? state.bpm.toFixed(1) : '--'}</b></span>
+          <span className="text-neutral-600">&nbsp;|&nbsp;</span>
+          <span>
+            TIME:&nbsp;<b className={`${accentColor}`}>{formatTime(state.currentTime)}</b><span className="text-neutral-500">&nbsp;/&nbsp;{formatTime(state.duration)}</span>
+          </span>
+        </div>
+      </section>
 
       {/* Waveform Visualization (Wide Full Width) */}
-      <div className="space-y-1 mt-2">
+      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 relative">
         <div className="relative w-full">
           {/* Mounting slot for wavesurfer */}
           <div 
@@ -141,9 +155,9 @@ export default function DJDeck({
                 <div className="z-10 flex flex-col items-center gap-2 bg-neutral-900/80 border border-white/10 px-6 py-3 rounded-2xl shadow-lg cursor-pointer hover:bg-neutral-800 transition-colors">
                   <div className="flex items-center gap-2 text-neutral-300">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    <span className="text-[11px] font-bold tracking-wider">LOAD AUDIO FILE</span>
+                    <span className="text-[11px] font-bold tracking-wider">&nbsp;LOAD&nbsp;AUDIO&nbsp;FILE&nbsp;</span>
                   </div>
-                  <span className="text-[9px] text-neutral-500 font-mono">Drop file here to begin</span>
+                  <span className="text-[9px] text-neutral-500 font-mono">&nbsp;Drop&nbsp;file&nbsp;here&nbsp;to&nbsp;begin&nbsp;</span>
                 </div>
               </div>
             )}
@@ -151,7 +165,7 @@ export default function DJDeck({
             {state.loading && (
               <div className="absolute inset-0 flex items-center justify-center gap-2 text-[10px] text-neon-cyan font-mono animate-pulse bg-black/70">
                 <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan animate-ping" />
-                LOADING AUDIO...
+                &nbsp;LOADING&nbsp;AUDIO...&nbsp;
               </div>
             )}
           </div>
@@ -169,10 +183,14 @@ export default function DJDeck({
             />
           )}
         </div>
-      </div>
+      </section>
+
+      {/* Separator div for DOM extractors */}
+      <div aria-hidden="true" className="h-0 leading-none">&nbsp;</div>
 
       {/* Platter & Pitch Fader Area */}
-      <div className="flex-1 flex items-center justify-center gap-8 py-2">
+      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 flex-1 flex flex-col gap-6 relative">
+        <div className="flex-1 flex items-center justify-center gap-8 py-2">
         {/* Jog Wheel Platter */}
         <div className="relative w-48 h-48 rounded-full bg-neutral-950 flex items-center justify-center border-4 border-neutral-900 shadow-inner group">
           {/* Vinyl grooves */}
@@ -240,88 +258,93 @@ export default function DJDeck({
         </div>
       </div>
 
-      {/* Bottom Controls: Hot Cues, Loops, Transport */}
-      <fieldset className="mt-auto grid grid-cols-12 gap-4">
-        <legend className="sr-only">Deck Controls</legend>
-        
-        {/* Hot Cues (4 pads) */}
-        <section className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2" aria-label="Hot Cues">
-          <h4 className="text-[9px] font-mono text-neutral-500 font-bold px-1 m-0">HOT CUES</h4>
-          <div className="grid grid-cols-4 gap-2 flex-1">
-            {[0, 1, 2, 3].map(i => {
-              const hasCue = state.hotCues && state.hotCues[i] !== null;
-              // Industry standard cue colors
-              const cueColors = ["bg-rose-500", "bg-blue-500", "bg-amber-500", "bg-emerald-500"];
-              const cueShadows = ["shadow-rose-500", "shadow-blue-500", "shadow-amber-500", "shadow-emerald-500"];
-              
-              return (
-                <button
-                  key={i}
-                  onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
-                  aria-label={`Hot Cue ${i + 1}`}
-                  className={`rounded cursor-pointer font-mono text-[11px] font-bold transition-all shadow-inner h-full min-h-[36px] ${
-                    hasCue 
-                      ? `${cueColors[i]} text-black border border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.5)] ${cueShadows[i]}` 
-                      : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
-                  }`}
-                >
-                  <span className="sr-only"> </span>
-                  {i + 1}
-                  <span className="sr-only"> </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+        {/* Separator div for DOM extractors */}
+        <div aria-hidden="true" className="h-0 leading-none">&nbsp;</div>
 
-        {/* Transport buttons */}
-        <section className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2" aria-label="Transport Controls">
-          <button 
-            onClick={() => onSeek(0)}
-            disabled={!state.trackLoaded}
-            className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span> CUE </span>
-          </button>
+        {/* Bottom Controls: Hot Cues, Loops, Transport */}
+        <fieldset className="mt-auto grid grid-cols-12 gap-4">
+          <legend className="sr-only">Deck Controls</legend>
           
-          <button
-            onClick={state.playing ? onPause : onPlay}
-            disabled={!state.trackLoaded || state.loading}
-            className={`flex-[1.5] rounded-lg border flex flex-col items-center justify-center gap-1 text-[11px] font-bold disabled:opacity-50 transition-all ${
-              state.playing
-                ? `bg-neutral-900 border-${accentColor.replace('text-', '')}/50 text-white`
-                : `${accentBg} text-black border-transparent hover:brightness-110`
-            }`}
-          >
-            {state.playing 
-              ? <><Pause className="w-4 h-4 fill-current" /><span> PAUSE </span></> 
-              : <><Play className="w-4 h-4 fill-current" /><span> PLAY </span></>}
-          </button>
+          {/* Hot Cues (4 pads) */}
+          <section className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2" aria-label="Hot Cues">
+            <h4 className="text-[9px] font-mono text-neutral-500 font-bold px-1 m-0">HOT&nbsp;CUES</h4>
+            <div className="grid grid-cols-4 gap-2 flex-1">
+              {[0, 1, 2, 3].map(i => {
+                const hasCue = state.hotCues && state.hotCues[i] !== null;
+                // Industry standard cue colors
+                const cueColors = ["bg-rose-500", "bg-blue-500", "bg-amber-500", "bg-emerald-500"];
+                const cueShadows = ["shadow-rose-500", "shadow-blue-500", "shadow-amber-500", "shadow-emerald-500"];
+                
+                return (
+                  <button
+                    key={i}
+                    onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
+                    aria-label={`Hot Cue ${i + 1}`}
+                    className={`rounded cursor-pointer font-mono text-[11px] font-bold transition-all shadow-inner h-full min-h-[36px] ${
+                      hasCue 
+                        ? `${cueColors[i]} text-black border border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.5)] ${cueShadows[i]}` 
+                        : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
+                    }`}
+                  >
+                    <span>&nbsp;{i + 1}&nbsp;</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
-          <button
-            onClick={onSync}
-            disabled={state.loading || !state.trackLoaded}
-            className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
-            <span> SYNC </span>
-          </button>
+          {/* Separator div for DOM extractors */}
+          <div aria-hidden="true" className="h-0 leading-none hidden">&nbsp;</div>
 
-          <button
-            onClick={() => onToggleLoop(4)}
-            disabled={!state.trackLoaded}
-            className={`flex-1 rounded-lg border flex flex-col items-center justify-center gap-1 text-[10px] font-mono font-bold disabled:opacity-50 transition-all ${
-              state.loopActive 
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
-                : 'bg-neutral-900 text-neutral-500 border-white/5 hover:text-white'
-            }`}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span> LOOP </span>
-          </button>
-        </section>
-      </fieldset>
+          {/* Transport buttons */}
+          <section className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2" aria-label="Transport Controls">
+            <button 
+              onClick={() => onSeek(0)}
+              disabled={!state.trackLoaded}
+              className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>&nbsp;CUE&nbsp;</span>
+            </button>
+            
+            <button
+              onClick={state.playing ? onPause : onPlay}
+              disabled={!state.trackLoaded || state.loading}
+              className={`flex-[1.5] rounded-lg border flex flex-col items-center justify-center gap-1 text-[11px] font-bold disabled:opacity-50 transition-all ${
+                state.playing
+                  ? `bg-neutral-900 border-${accentColor.replace('text-', '')}/50 text-white`
+                  : `${accentBg} text-black border-transparent hover:brightness-110`
+              }`}
+            >
+              {state.playing 
+                ? <><Pause className="w-4 h-4 fill-current" /><span>&nbsp;PAUSE&nbsp;</span></> 
+                : <><Play className="w-4 h-4 fill-current" /><span>&nbsp;PLAY&nbsp;</span></>}
+            </button>
+
+            <button
+              onClick={onSync}
+              disabled={state.loading || !state.trackLoaded}
+              className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
+              <span>&nbsp;SYNC&nbsp;</span>
+            </button>
+
+            <button
+              onClick={() => onToggleLoop(4)}
+              disabled={!state.trackLoaded}
+              className={`flex-1 rounded-lg border flex flex-col items-center justify-center gap-1 text-[10px] font-mono font-bold disabled:opacity-50 transition-all ${
+                state.loopActive 
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
+                  : 'bg-neutral-900 text-neutral-500 border-white/5 hover:text-white'
+              }`}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>&nbsp;LOOP&nbsp;</span>
+            </button>
+          </section>
+        </fieldset>
+      </section>
     </div>
   );
 }

@@ -60,8 +60,8 @@ function ChannelStrip({
         { label: "MID", value: state.eqMid, band: "mid" as const },
         { label: "LOW", value: state.eqLow, band: "low" as const },
       ].map(eq => (
-        <div key={eq.label} className="flex flex-col items-center gap-1.5 w-full">
-          <label className="text-[9px] font-mono text-neutral-400">{eq.label}</label>
+        <div key={eq.label} className="flex flex-col items-center w-full">
+          <label className="text-[9px] font-mono text-neutral-400 mb-2">&nbsp;{eq.label}&nbsp;</label>
           <input
             type="range"
             min="-12"
@@ -75,8 +75,8 @@ function ChannelStrip({
       ))}
 
       {/* Filter Knob */}
-      <div className="flex flex-col items-center gap-1.5 w-full pt-2 border-t border-white/5">
-        <label className="text-[9px] font-mono text-neon-pink">FILTER</label>
+      <div className="flex flex-col items-center w-full pt-2 border-t border-white/5">
+        <label className="text-[9px] font-mono text-neon-pink mb-2">&nbsp;FILTER&nbsp;</label>
         <input
           type="range"
           min="-100"
@@ -86,10 +86,10 @@ function ChannelStrip({
           onChange={(e) => onFilterChange(parseInt(e.target.value))}
           className="w-14 h-1 bg-neutral-800 accent-neon-pink rounded-lg appearance-none cursor-pointer outline-none"
         />
-        <span className={`text-[8px] font-mono ${
+        <span className={`text-[8px] mt-1 font-mono ${
           state.filter === 0 ? "text-neutral-500" : state.filter < 0 ? "text-neon-cyan" : "text-neon-pink"
         }`}>
-          {state.filter === 0 ? "FLAT" : state.filter < 0 ? `LPF` : `HPF`}
+          {state.filter === 0 ? "\u00A0FLAT\u00A0" : state.filter < 0 ? `\u00A0LPF\u00A0` : `\u00A0HPF\u00A0`}
         </span>
       </div>
 
@@ -149,16 +149,16 @@ export default function MixerDesk({
       <h2 id="mixer-title" className="sr-only">CENTRAL MIXER</h2>
       
       {/* Top Header: Master Vol & FX */}
-      <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-2xl gap-4 relative">
+      <section className="flex items-center justify-between bg-black/30 border border-white/5 p-4 rounded-2xl gap-4 relative" aria-label="Master Controls">
         
         {/* Master Volume */}
         <div className="flex-1 flex flex-col gap-1.5">
-          <div className="flex justify-between items-center">
-            <span className="font-mono text-[9px] text-neutral-400 flex items-center gap-1"><Volume2 className="w-3 h-3" /> MASTER</span>
+          <div className="flex justify-between items-center mb-1">
+            <span className="font-mono text-[9px] text-neutral-400 flex items-center gap-1"><Volume2 className="w-3 h-3" />&nbsp;MASTER&nbsp;</span>
             {/* BPM Sync Indicator */}
             {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
               <span className="text-[8px] font-mono font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
-                BPM SYNCED
+                &nbsp;BPM&nbsp;SYNCED&nbsp;
               </span>
             )}
           </div>
@@ -182,8 +182,11 @@ export default function MixerDesk({
               delayActive ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
             }`}
           >
-            ECHO
+            <span>&nbsp;ECHO&nbsp;</span>
           </button>
+          
+          <div aria-hidden="true" className="w-1"></div>
+
           <button
             title="Room Reverb Effect"
             onClick={() => onToggleFX("reverb", !reverbActive)}
@@ -191,10 +194,10 @@ export default function MixerDesk({
               reverbActive ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
             }`}
           >
-            RVB
+            <span>&nbsp;RVB&nbsp;</span>
           </button>
         </div>
-      </div>
+      </section>
 
       {/* Main Channel Strips (A & B side by side) */}
       <div className="flex-1 flex justify-between px-4 relative">
@@ -218,9 +221,9 @@ export default function MixerDesk({
       </div>
 
       {/* AI Automated Transitions (Collapsible or compact) */}
-      <div className="bg-black/40 rounded-xl p-3 border border-white/[0.03] space-y-3">
+      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3" aria-label="AI Transitions">
         <h4 className="text-[10px] flex items-center gap-1.5 font-mono text-neon-cyan">
-          <Sparkles className="w-3 h-3" /> AI TRANSITIONS
+          <Sparkles className="w-3 h-3" />&nbsp;AI&nbsp;TRANSITIONS&nbsp;
         </h4>
         <div className="grid grid-cols-2 gap-2">
           {transitionPresets.map((preset) => (
@@ -235,9 +238,9 @@ export default function MixerDesk({
                   : "bg-[#111113] border-white/10 hover:border-white/30 hover:bg-neutral-800 hover:-translate-y-0.5"
               }`}
             >
-              <strong className="text-[10px] font-mono text-white font-bold tracking-wide">{preset.label}</strong>
+              <strong className="text-[10px] font-mono text-white font-bold tracking-wide">&nbsp;{preset.label}&nbsp;</strong>
               <span className="sr-only"> - </span>
-              <span className="text-[8px] font-mono text-neutral-400 leading-tight">{preset.desc}</span>
+              <span className="text-[8px] font-mono text-neutral-400 leading-tight">&nbsp;{preset.desc}&nbsp;</span>
             </button>
           ))}
         </div>
@@ -245,8 +248,8 @@ export default function MixerDesk({
         {isTransitioning && (
           <div className="space-y-1.5 font-mono">
             <div className="flex justify-between text-[9px] text-neon-pink">
-              <span>CROSSFADING...</span>
-              <span>{transitionProgress.toFixed(0)}%</span>
+              <span>&nbsp;CROSSFADING...&nbsp;</span>
+              <span>&nbsp;{transitionProgress.toFixed(0)}%&nbsp;</span>
             </div>
             <div className="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
               <div
@@ -256,14 +259,14 @@ export default function MixerDesk({
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Crossfader */}
-      <div className="space-y-2 pb-2">
+      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3 pb-3" aria-label="Crossfader">
         <div className="flex justify-between text-[9px] font-mono text-neutral-500">
-          <span className={crossfader < 0 ? "text-neon-cyan font-bold" : ""}>A</span>
-          <span>CROSSFADER</span>
-          <span className={crossfader > 0 ? "text-neon-purple font-bold" : ""}>B</span>
+          <span className={crossfader < 0 ? "text-neon-cyan font-bold" : ""}>&nbsp;A&nbsp;</span>
+          <span>&nbsp;CROSSFADER&nbsp;</span>
+          <span className={crossfader > 0 ? "text-neon-purple font-bold" : ""}>&nbsp;B&nbsp;</span>
         </div>
         <div className="relative py-2 px-3 bg-black/60 border border-white/5 rounded-xl overflow-hidden">
           {/* Dynamic Background Gradient Indicator */}
@@ -286,7 +289,7 @@ export default function MixerDesk({
             }`}
           />
         </div>
-      </div>
+      </section>
 
     </article>
   );
