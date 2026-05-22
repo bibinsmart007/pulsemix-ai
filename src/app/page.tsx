@@ -338,7 +338,9 @@ export default function Home() {
                 }`}
               >
                 <Icon className={`w-3.5 h-3.5 ${isActive ? "text-neon-cyan" : "text-neutral-500"}`} />
-                {tab.label}
+                <span className="sr-only"> </span>
+                <span>{tab.label}</span>
+                <span className="sr-only"> </span>
               </button>
             );
           })}
@@ -897,23 +899,23 @@ export default function Home() {
       </main>
 
       {/* Global Diagnostics Footer */}
-      <footer className="h-8 flex-shrink-0 bg-black/60 border-t border-white/5 flex items-center justify-between px-6 font-mono text-[9px] text-neutral-500 z-20">
+      <footer className="h-6 flex-shrink-0 bg-transparent border-t border-white/5 flex items-center justify-between px-6 font-mono text-[8px] text-neutral-600/70 z-20">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <span>WEB AUDIO API</span>
-            <span className="text-emerald-500 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> ONLINE
+            <span className="text-emerald-500/70 flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-emerald-500/70" /> ONLINE
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span>FASTAPI BACKEND</span>
-            <span className="text-neon-cyan flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan" /> READY
+            <span className="text-neon-cyan/70 flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-neon-cyan/70" /> READY
             </span>
           </div>
         </div>
         <div>
-          <span>LATENCY: <span className="text-neutral-400">~2.4 ms</span></span>
+          <span>LATENCY: <span className="text-neutral-500/70">~2.4 ms</span></span>
         </div>
       </footer>
     </div>

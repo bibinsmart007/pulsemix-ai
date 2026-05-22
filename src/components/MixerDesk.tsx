@@ -48,7 +48,8 @@ function ChannelStrip({
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full relative z-10 bg-black/30 border border-white/5 rounded-2xl py-4 px-2 shadow-inner">
+    <section className="flex flex-col items-center gap-6 w-full relative z-10 bg-black/30 border border-white/5 rounded-2xl py-4 px-2 shadow-inner" aria-labelledby={`ch-${deckId}-title`}>
+      <h3 id={`ch-${deckId}-title`} className="sr-only">CHANNEL {deckId} STRIP</h3>
       <div className="font-mono text-[10px] font-bold text-neutral-500 mb-2">
         <span className={accentColor}>CH {deckId}</span>
       </div>
@@ -114,7 +115,7 @@ function ChannelStrip({
           />
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -144,7 +145,8 @@ export default function MixerDesk({
   ] as const;
 
   return (
-    <div className="glass-panel rounded-3xl p-4 border border-white/10 bg-neutral-950/80 flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
+    <article aria-labelledby="mixer-title" className="glass-panel rounded-3xl p-4 border-2 border-white/10 bg-[#0a0a0c] flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
+      <h2 id="mixer-title" className="sr-only">CENTRAL MIXER</h2>
       
       {/* Top Header: Master Vol & FX */}
       <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-2xl gap-4 relative">
@@ -227,14 +229,15 @@ export default function MixerDesk({
               title={preset.desc}
               onClick={() => onTriggerTransition(preset.id, 8)}
               disabled={isTransitioning}
-              className={`p-2 rounded-lg border text-left transition-all flex flex-col gap-0.5 ${
+              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-center gap-1 min-h-[56px] shadow-sm ${
                 isTransitioning 
                   ? "bg-neutral-900 border-white/5 opacity-40 cursor-not-allowed" 
-                  : "bg-neutral-900/60 border-white/10 hover:border-white/30 hover:bg-neutral-800"
+                  : "bg-[#111113] border-white/10 hover:border-white/30 hover:bg-neutral-800 hover:-translate-y-0.5"
               }`}
             >
-              <span className="text-[9px] font-mono text-white font-bold">{preset.label}</span>
-              <span className="text-[7px] font-mono text-neutral-500">{preset.desc}</span>
+              <strong className="text-[10px] font-mono text-white font-bold tracking-wide">{preset.label}</strong>
+              <span className="sr-only"> - </span>
+              <span className="text-[8px] font-mono text-neutral-400 leading-tight">{preset.desc}</span>
             </button>
           ))}
         </div>
@@ -285,6 +288,6 @@ export default function MixerDesk({
         </div>
       </div>
 
-    </div>
+    </article>
   );
 }

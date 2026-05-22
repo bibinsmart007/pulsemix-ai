@@ -109,22 +109,14 @@ export default function DJDeck({
             {state.loading ? "Loading track..." : state.title || "No Track Loaded"}
           </h3>
           
-          <div className="flex gap-2 text-[10px] text-neutral-400 font-mono mt-auto">
-            <div className="bg-black/40 border border-white/5 px-2 py-1 rounded">
-              KEY: <b className="text-white">{state.key || '--'}</b>
-            </div>
-            <div className="bg-black/40 border border-white/5 px-2 py-1 rounded">
-              BPM: <b className="text-white">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
-            </div>
-          </div>
-        </div>
-
-        <div className="text-right flex-shrink-0">
-          <div className={`text-3xl font-light font-mono ${accentColor}`}>
-            {formatTime(state.currentTime)}
-          </div>
-          <div className="text-[10px] text-neutral-500 font-mono tracking-wider">
-            -{formatTime(Math.max(0, state.duration - state.currentTime))}
+          <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono mt-auto bg-black/40 border border-white/5 px-3 py-1.5 rounded w-full">
+            <span>KEY: <b className="text-white ml-1">{state.key || '--'}</b></span>
+            <span className="text-neutral-600">|</span>
+            <span>BPM: <b className="text-white ml-1">{state.bpm ? state.bpm.toFixed(1) : '--'}</b></span>
+            <span className="text-neutral-600">|</span>
+            <span>
+              TIME: <b className={`ml-1 ${accentColor}`}>{formatTime(state.currentTime)}</b> <span className="text-neutral-500">/ {formatTime(state.duration)}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -249,10 +241,12 @@ export default function DJDeck({
       </div>
 
       {/* Bottom Controls: Hot Cues, Loops, Transport */}
-      <div className="mt-auto grid grid-cols-12 gap-4">
+      <fieldset className="mt-auto grid grid-cols-12 gap-4">
+        <legend className="sr-only">Deck Controls</legend>
+        
         {/* Hot Cues (4 pads) */}
-        <div className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2">
-          <span className="text-[9px] font-mono text-neutral-500 font-bold px-1">HOT CUES</span>
+        <section className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2" aria-label="Hot Cues">
+          <h4 className="text-[9px] font-mono text-neutral-500 font-bold px-1 m-0">HOT CUES</h4>
           <div className="grid grid-cols-4 gap-2 flex-1">
             {[0, 1, 2, 3].map(i => {
               const hasCue = state.hotCues && state.hotCues[i] !== null;
@@ -264,27 +258,31 @@ export default function DJDeck({
                 <button
                   key={i}
                   onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
+                  aria-label={`Hot Cue ${i + 1}`}
                   className={`rounded cursor-pointer font-mono text-[11px] font-bold transition-all shadow-inner h-full min-h-[36px] ${
                     hasCue 
                       ? `${cueColors[i]} text-black border border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.5)] ${cueShadows[i]}` 
                       : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
                   }`}
                 >
+                  <span className="sr-only"> </span>
                   {i + 1}
+                  <span className="sr-only"> </span>
                 </button>
               );
             })}
           </div>
-        </div>
+        </section>
 
         {/* Transport buttons */}
-        <div className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2">
+        <section className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2" aria-label="Transport Controls">
           <button 
             onClick={() => onSeek(0)}
             disabled={!state.trackLoaded}
             className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> CUE
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span> CUE </span>
           </button>
           
           <button
@@ -296,7 +294,9 @@ export default function DJDeck({
                 : `${accentBg} text-black border-transparent hover:brightness-110`
             }`}
           >
-            {state.playing ? <><Pause className="w-4 h-4 fill-current" /> PAUSE</> : <><Play className="w-4 h-4 fill-current" /> PLAY</>}
+            {state.playing 
+              ? <><Pause className="w-4 h-4 fill-current" /><span> PAUSE </span></> 
+              : <><Play className="w-4 h-4 fill-current" /><span> PLAY </span></>}
           </button>
 
           <button
@@ -304,7 +304,8 @@ export default function DJDeck({
             disabled={state.loading || !state.trackLoaded}
             className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
           >
-            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" /> SYNC
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
+            <span> SYNC </span>
           </button>
 
           <button
@@ -316,10 +317,11 @@ export default function DJDeck({
                 : 'bg-neutral-900 text-neutral-500 border-white/5 hover:text-white'
             }`}
           >
-            <RotateCcw className="w-3.5 h-3.5" /> LOOP
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span> LOOP </span>
           </button>
-        </div>
-      </div>
+        </section>
+      </fieldset>
     </div>
   );
 }
