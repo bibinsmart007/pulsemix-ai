@@ -54,7 +54,7 @@ function ChannelStrip({
             {bands.map(eq => (
               <li key={eq.label} className="w-full block">
                 <div className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full grid grid-cols-[40px_1fr_40px] gap-4 items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
-                  <label className="text-[11px] font-mono text-neutral-400 font-bold text-center block tracking-widest">{eq.label}</label>
+                <div className="w-full block"><label className="text-[11px] font-mono text-neutral-400 font-bold text-center block tracking-widest">{eq.label}</label></div>
                   
                   <div className="relative w-full h-2 block">
                     <input
@@ -69,9 +69,9 @@ function ChannelStrip({
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-4 bg-white/20" />
                   </div>
 
-                  <span className="text-[11px] font-mono text-white text-center font-bold block bg-black rounded border border-white/10 py-1 shadow-inner">
+                  <div className="w-full block"><span className="text-[11px] font-mono text-white text-center font-bold block bg-black rounded border border-white/10 py-1 shadow-inner">
                     {eq.value > 0 ? '+' : ''}{eq.value}
-                  </span>
+                  </span></div>
                 </div>
               </li>
             ))}
@@ -146,19 +146,21 @@ export default function MixerDesk({
       <section className="grid grid-cols-2 gap-6 relative mb-8">
         
         {/* Master Volume Block */}
-        <article className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
-          <header className="flex justify-between items-center bg-[#111115] px-5 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
-            <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-2 tracking-[0.1em]">
-              <Volume2 className="w-4 h-4 text-neutral-400" /> MASTER
-            </h3>
-            {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
-              <span className="text-[10px] font-mono font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.4)] animate-pulse tracking-widest">
-                SYNCED
-              </span>
-            )}
-          </header>
+        <ul className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4 list-none m-0">
+          <li className="block w-full">
+            <header className="flex justify-between items-center bg-[#111115] px-5 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
+              <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-2 tracking-[0.1em]">
+                <Volume2 className="w-4 h-4 text-neutral-400" /> MASTER
+              </h3>
+              {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
+                <span className="text-[10px] font-mono font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.4)] animate-pulse tracking-widest block">
+                  SYNCED
+                </span>
+              )}
+            </header>
+          </li>
           
-          <div className="flex-1 flex flex-col justify-center px-2 py-4">
+          <li className="block w-full flex-1 flex flex-col justify-center px-2 py-4">
             <input
               type="range"
               min="0"
@@ -172,8 +174,16 @@ export default function MixerDesk({
                 WebkitAppearance: 'none'
               }}
             />
-          </div>
-        </article>
+          </li>
+          
+          <li className="block w-full text-center">
+            <div className="bg-black border border-white/5 shadow-inner rounded px-3 py-1 inline-block">
+              <span className="text-[12px] font-mono text-neutral-300 font-bold block">
+                {(masterVolume * 100).toFixed(0)}% VOL
+              </span>
+            </div>
+          </li>
+        </ul>
         
         {/* FX Toggles Block */}
         <article className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
@@ -244,8 +254,8 @@ export default function MixerDesk({
                     : "bg-gradient-to-b from-[#1a1a20] to-[#111] border-[#333] hover:border-white/20 hover:from-[#222] hover:to-[#1a1a20]"
                 }`}
               >
-                <strong className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md w-full">{preset.label}</strong>
-                <span className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 w-full">{preset.desc}</span>
+                <h4 className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md w-full m-0 p-0">{preset.label}</h4>
+                <p className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 w-full m-0">{preset.desc}</p>
               </button>
             </li>
           ))}
