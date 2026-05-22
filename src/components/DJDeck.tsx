@@ -62,38 +62,44 @@ function InfoCard({ title, value, span = false }: { title: string; value: React.
 // Sub-Component: Pitch Card
 function PitchCard({ pitch, onPitchChange, accentBg }: { pitch: number, onPitchChange: (p: number) => void, accentBg: string }) {
   return (
-    <article className="flex flex-col items-center bg-[#0a0a0c] border border-[#222] p-4 rounded-2xl shadow-[0_8px_20px_rgba(0,0,0,0.6)] w-24">
+    <article className="flex flex-col items-center bg-[#0a0a0c] border border-[#222] p-4 rounded-2xl shadow-[0_8px_20px_rgba(0,0,0,0.6)] min-w-[100px]">
       <header className="w-full text-center mb-3">
         <h4 className="text-[9px] font-mono font-bold text-neutral-500 tracking-widest border-b border-white/10 pb-2">PITCH</h4>
       </header>
       
-      <div className="flex flex-col items-center justify-between h-[240px] w-full bg-[#111115] border border-[#1a1a20] py-4 rounded-xl shadow-[inset_0_4px_15px_rgba(0,0,0,1)] relative">
-        <div className="bg-black px-2 py-1.5 rounded text-center border border-white/5 shadow-inner mb-2 w-12 block">
-          <span className="text-[11px] text-neutral-300 font-mono font-bold block">+10%</span>
-        </div>
+      <ul className="flex flex-col items-center justify-between h-[240px] w-full bg-[#111115] border border-[#1a1a20] py-4 rounded-xl shadow-[inset_0_4px_15px_rgba(0,0,0,1)] relative list-none p-0 m-0">
+        <li className="w-full flex justify-center block">
+          <div className="bg-black px-3 py-2 rounded text-center border border-white/5 shadow-inner min-w-[50px] block">
+            <span className="text-[11px] text-neutral-300 font-mono font-bold block">+10%</span>
+          </div>
+        </li>
 
-        <div className="block h-32 w-2.5 my-1">
-          <input 
-            id="pitch-slider"
-            type="range"
-            min="-0.10"
-            max="0.10"
-            step="0.001"
-            value={pitch}
-            onChange={(e) => onPitchChange(parseFloat(e.target.value))}
-            className={`accent-${accentBg.replace('bg-', '')} h-full vertical-slider appearance-none w-full bg-black rounded-full border border-neutral-800 outline-none cursor-row-resize shadow-inner block`}
-            style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
-          />
-        </div>
+        <li className="flex-1 w-full flex justify-center py-2 block">
+          <div className="block h-32 w-3">
+            <input 
+              id="pitch-slider"
+              type="range"
+              min="-0.10"
+              max="0.10"
+              step="0.001"
+              value={pitch}
+              onChange={(e) => onPitchChange(parseFloat(e.target.value))}
+              className={`accent-${accentBg.replace('bg-', '')} h-full vertical-slider appearance-none w-full bg-black rounded-full border border-neutral-800 outline-none cursor-row-resize shadow-inner block`}
+              style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
+            />
+          </div>
+        </li>
         
-        <div className="bg-black px-2 py-1.5 rounded text-center border border-white/5 shadow-inner mt-2 w-12 block">
-          <span className="text-[11px] text-neutral-300 font-mono font-bold block">-10%</span>
-        </div>
+        <li className="w-full flex justify-center block">
+          <div className="bg-black px-3 py-2 rounded text-center border border-white/5 shadow-inner min-w-[50px] block">
+            <span className="text-[11px] text-neutral-300 font-mono font-bold block">-10%</span>
+          </div>
+        </li>
         
         <button 
           type="button"
           onClick={() => onPitchChange(0)}
-          className={`absolute -right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-[#0a0a0c] text-[9px] font-mono font-bold transition-all border border-[#222] shadow-[0_2px_5px_rgba(0,0,0,0.8)] ${
+          className={`absolute -right-5 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-[#0a0a0c] text-[9px] font-mono font-bold transition-all border border-[#222] shadow-[0_2px_5px_rgba(0,0,0,0.8)] ${
             pitch === 0 
               ? "text-neutral-500 shadow-inner" 
               : "text-white hover:bg-neutral-800 active:scale-95"
@@ -101,7 +107,7 @@ function PitchCard({ pitch, onPitchChange, accentBg }: { pitch: number, onPitchC
         >
           0%
         </button>
-      </div>
+      </ul>
     </article>
   );
 }
@@ -121,17 +127,17 @@ function ControlsCard({
           <div className="flex-1 h-[1px] bg-gradient-to-r from-white/10 to-transparent" />
         </header>
         
-        <div className="grid grid-cols-4 gap-3 flex-1">
+        <ul className="grid grid-cols-4 gap-3 flex-1 w-full list-none p-0 m-0">
           {[0, 1, 2, 3].map(i => {
             const hasCue = state.hotCues && state.hotCues[i] !== null;
             const cueColors = ["from-rose-600 to-rose-900", "from-blue-600 to-blue-900", "from-amber-500 to-amber-800", "from-emerald-500 to-emerald-800"];
             
             return (
-              <React.Fragment key={i}>
+              <li key={i} className="block w-full">
                 <button
                   type="button"
                   onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
-                  className={`w-full aspect-square rounded-[16px] cursor-pointer font-mono text-[16px] font-bold transition-all flex items-center justify-center border-[3px] shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block ${
+                  className={`w-full aspect-square rounded-[16px] cursor-pointer font-mono text-[16px] font-bold transition-all flex items-center justify-center border-[3px] shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[48px] min-h-[48px] ${
                     hasCue 
                       ? `bg-gradient-to-b ${cueColors[i]} text-white border-white/20 hover:brightness-110` 
                       : 'bg-[#1a1a20] text-neutral-600 border-[#0a0a0c] hover:bg-[#222]'
@@ -139,10 +145,10 @@ function ControlsCard({
                 >
                   <span className="block w-full text-center">{i + 1}</span>
                 </button>
-              </React.Fragment>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </section>
 
       {/* Transport Module */}
@@ -152,56 +158,64 @@ function ControlsCard({
           <div className="flex-1 h-[1px] bg-gradient-to-r from-white/10 to-transparent" />
         </header>
 
-        <div className="grid grid-cols-4 gap-3 flex-1">
-          <button 
-            type="button"
-            onClick={() => onSeek(0)}
-            disabled={!state.trackLoaded}
-            className="w-full h-full min-h-[80px] rounded-[16px] border-[3px] border-white/10 bg-[#1a1a20] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block"
-          >
-            <RotateCcw className="w-6 h-6 text-neutral-400" />
-            <span className="block text-[12px] font-mono font-bold tracking-widest text-neutral-300">CUE</span>
-          </button>
+        <ul className="grid grid-cols-4 gap-3 flex-1 w-full list-none p-0 m-0">
+          <li className="block w-full">
+            <button 
+              type="button"
+              onClick={() => onSeek(0)}
+              disabled={!state.trackLoaded}
+              className="w-full h-full min-h-[80px] rounded-[16px] border-[3px] border-white/10 bg-[#1a1a20] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px]"
+            >
+              <RotateCcw className="w-6 h-6 text-neutral-400 block" />
+              <span className="block text-[12px] font-mono font-bold tracking-widest text-neutral-300 w-full text-center">CUE</span>
+            </button>
+          </li>
           
-          <button
-            type="button"
-            onClick={state.playing ? onPause : onPlay}
-            disabled={!state.trackLoaded || state.loading}
-            className={`w-full h-full min-h-[80px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block ${
-              state.playing
-                ? `bg-black border-${accentColor.replace('text-', '')}/50 text-white shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(0,0,0,0.5)] translate-y-[4px]`
-                : `bg-gradient-to-b ${accentBg === 'bg-neon-cyan' ? 'from-cyan-500 to-cyan-700' : 'from-purple-500 to-purple-700'} border-white/20 text-white hover:brightness-110`
-            }`}
-          >
-            {state.playing 
-              ? <><Pause className={`w-7 h-7 fill-current ${accentColor}`} /><span className={`block text-[13px] font-bold tracking-widest ${accentColor}`}>PAUSE</span></> 
-              : <><Play className="w-7 h-7 fill-current" /><span className="block text-[13px] font-bold tracking-widest">PLAY</span></>}
-          </button>
+          <li className="block w-full">
+            <button
+              type="button"
+              onClick={state.playing ? onPause : onPlay}
+              disabled={!state.trackLoaded || state.loading}
+              className={`w-full h-full min-h-[80px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px] ${
+                state.playing
+                  ? `bg-black border-${accentColor.replace('text-', '')}/50 text-white shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(0,0,0,0.5)] translate-y-[4px]`
+                  : `bg-gradient-to-b ${accentBg === 'bg-neon-cyan' ? 'from-cyan-500 to-cyan-700' : 'from-purple-500 to-purple-700'} border-white/20 text-white hover:brightness-110`
+              }`}
+            >
+              {state.playing 
+                ? <><Pause className={`w-7 h-7 fill-current ${accentColor} block`} /><span className={`block text-[13px] font-bold tracking-widest ${accentColor} w-full text-center`}>PAUSE</span></> 
+                : <><Play className="w-7 h-7 fill-current block" /><span className="block text-[13px] font-bold tracking-widest w-full text-center">PLAY</span></>}
+            </button>
+          </li>
 
-          <button
-            type="button"
-            onClick={onSync}
-            disabled={state.loading || !state.trackLoaded}
-            className="w-full h-full min-h-[80px] rounded-[16px] border-[3px] border-amber-500/20 bg-gradient-to-b from-[#1a1a20] to-[#111] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block group"
-          >
-            <Zap className="w-6 h-6 text-amber-500 fill-amber-500/20 group-hover:fill-amber-500 transition-colors" />
-            <span className="block text-[12px] font-mono font-bold tracking-widest text-amber-500">SYNC</span>
-          </button>
+          <li className="block w-full">
+            <button
+              type="button"
+              onClick={onSync}
+              disabled={state.loading || !state.trackLoaded}
+              className="w-full h-full min-h-[80px] rounded-[16px] border-[3px] border-amber-500/20 bg-gradient-to-b from-[#1a1a20] to-[#111] hover:bg-[#222] text-white flex flex-col items-center justify-center gap-2 disabled:opacity-50 shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block group min-w-[64px]"
+            >
+              <Zap className="w-6 h-6 text-amber-500 fill-amber-500/20 group-hover:fill-amber-500 transition-colors block" />
+              <span className="block text-[12px] font-mono font-bold tracking-widest text-amber-500 w-full text-center">SYNC</span>
+            </button>
+          </li>
 
-          <button
-            type="button"
-            onClick={() => onToggleLoop(4)}
-            disabled={!state.trackLoaded}
-            className={`w-full h-full min-h-[80px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block ${
-              state.loopActive 
-                ? 'bg-gradient-to-b from-amber-500 to-amber-700 text-black border-amber-300' 
-                : 'bg-[#1a1a20] border-white/10 hover:bg-[#222] text-neutral-400'
-            }`}
-          >
-            <RotateCcw className={`w-6 h-6 ${state.loopActive ? 'text-black' : ''}`} />
-            <span className={`block text-[12px] font-mono font-bold tracking-widest ${state.loopActive ? 'text-black' : ''}`}>LOOP</span>
-          </button>
-        </div>
+          <li className="block w-full">
+            <button
+              type="button"
+              onClick={() => onToggleLoop(4)}
+              disabled={!state.trackLoaded}
+              className={`w-full h-full min-h-[80px] rounded-[16px] border-[3px] flex flex-col items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block min-w-[64px] ${
+                state.loopActive 
+                  ? 'bg-gradient-to-b from-amber-500 to-amber-700 text-black border-amber-300' 
+                  : 'bg-[#1a1a20] border-white/10 hover:bg-[#222] text-neutral-400'
+              }`}
+            >
+              <RotateCcw className={`w-6 h-6 ${state.loopActive ? 'text-black' : ''} block`} />
+              <span className={`block text-[12px] font-mono font-bold tracking-widest ${state.loopActive ? 'text-black' : ''} w-full text-center`}>LOOP</span>
+            </button>
+          </li>
+        </ul>
       </section>
     </article>
   );

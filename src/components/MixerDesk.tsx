@@ -50,28 +50,32 @@ function ChannelStrip({
             <h4 className="text-[10px] font-mono font-bold text-neutral-500 tracking-[0.2em] text-center block">EQ</h4>
           </header>
           
-          {bands.map(eq => (
-            <div key={eq.label} className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full grid grid-cols-[40px_1fr_40px] gap-4 items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
-              <label className="text-[11px] font-mono text-neutral-400 font-bold text-center block tracking-widest">{eq.label}</label>
-              
-              <div className="relative w-full h-2 block">
-                <input
-                  type="range"
-                  min="-12"
-                  max="12"
-                  step="0.5"
-                  value={eq.value}
-                  onChange={(e) => onEQChange(deckId, eq.band, parseFloat(e.target.value))}
-                  className={`absolute inset-0 w-full h-full bg-black accent-${color.replace('neon-', '')}-500 rounded-full appearance-none cursor-pointer outline-none shadow-inner block z-10`}
-                />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-4 bg-white/20" />
-              </div>
+          <ul className="flex flex-col space-y-4 list-none p-0 m-0 w-full">
+            {bands.map(eq => (
+              <li key={eq.label} className="w-full block">
+                <div className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full grid grid-cols-[40px_1fr_40px] gap-4 items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
+                  <label className="text-[11px] font-mono text-neutral-400 font-bold text-center block tracking-widest">{eq.label}</label>
+                  
+                  <div className="relative w-full h-2 block">
+                    <input
+                      type="range"
+                      min="-12"
+                      max="12"
+                      step="0.5"
+                      value={eq.value}
+                      onChange={(e) => onEQChange(deckId, eq.band, parseFloat(e.target.value))}
+                      className={`absolute inset-0 w-full h-full bg-black accent-${color.replace('neon-', '')}-500 rounded-full appearance-none cursor-pointer outline-none shadow-inner block z-10`}
+                    />
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-4 bg-white/20" />
+                  </div>
 
-              <span className="text-[11px] font-mono text-white text-center font-bold block bg-black rounded border border-white/10 py-1 shadow-inner">
-                {eq.value > 0 ? '+' : ''}{eq.value}
-              </span>
-            </div>
-          ))}
+                  <span className="text-[11px] font-mono text-white text-center font-bold block bg-black rounded border border-white/10 py-1 shadow-inner">
+                    {eq.value > 0 ? '+' : ''}{eq.value}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
 
         {/* Filter Section */}
@@ -179,32 +183,36 @@ export default function MixerDesk({
             </h3>
           </header>
 
-          <div className="grid grid-cols-2 gap-4 flex-1">
-            <button
-              type="button"
-              onClick={() => onToggleFX("delay", !delayActive)}
-              className={`rounded-[16px] text-[13px] font-mono font-bold transition-all flex flex-col items-center justify-center gap-2 shadow-[0_6px_0_rgba(0,0,0,0.8)] border-[3px] block w-full active:translate-y-[6px] active:shadow-none min-h-[64px] ${
-                delayActive 
-                  ? "bg-cyan-950 text-cyan-400 border-cyan-800 shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(6,182,212,0.4)] translate-y-[4px]" 
-                  : "bg-[#1a1a20] text-neutral-400 border-white/10 hover:text-white hover:bg-[#222]"
-              }`}
-            >
-              <span className={`w-2.5 h-2.5 rounded-full ${delayActive ? 'bg-cyan-400 shadow-[0_0_12px_#22d3ee]' : 'bg-neutral-700'}`} />
-              <span className="block">ECHO</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onToggleFX("reverb", !reverbActive)}
-              className={`rounded-[16px] text-[13px] font-mono font-bold transition-all flex flex-col items-center justify-center gap-2 shadow-[0_6px_0_rgba(0,0,0,0.8)] border-[3px] block w-full active:translate-y-[6px] active:shadow-none min-h-[64px] ${
-                reverbActive 
-                  ? "bg-purple-950 text-purple-400 border-purple-800 shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(168,85,247,0.4)] translate-y-[4px]" 
-                  : "bg-[#1a1a20] text-neutral-400 border-white/10 hover:text-white hover:bg-[#222]"
-              }`}
-            >
-              <span className={`w-2.5 h-2.5 rounded-full ${reverbActive ? 'bg-purple-400 shadow-[0_0_12px_#c084fc]' : 'bg-neutral-700'}`} />
-              <span className="block">REVERB</span>
-            </button>
-          </div>
+          <ul className="grid grid-cols-2 gap-4 flex-1 list-none p-0 m-0 w-full">
+            <li className="block w-full">
+              <button
+                type="button"
+                onClick={() => onToggleFX("delay", !delayActive)}
+                className={`rounded-[16px] text-[13px] font-mono font-bold transition-all flex flex-col items-center justify-center gap-2 shadow-[0_6px_0_rgba(0,0,0,0.8)] border-[3px] block w-full active:translate-y-[6px] active:shadow-none min-h-[64px] ${
+                  delayActive 
+                    ? "bg-cyan-950 text-cyan-400 border-cyan-800 shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(6,182,212,0.4)] translate-y-[4px]" 
+                    : "bg-[#1a1a20] text-neutral-400 border-white/10 hover:text-white hover:bg-[#222]"
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${delayActive ? 'bg-cyan-400 shadow-[0_0_12px_#22d3ee]' : 'bg-neutral-700'}`} />
+                <span className="block w-full text-center">ECHO</span>
+              </button>
+            </li>
+            <li className="block w-full">
+              <button
+                type="button"
+                onClick={() => onToggleFX("reverb", !reverbActive)}
+                className={`rounded-[16px] text-[13px] font-mono font-bold transition-all flex flex-col items-center justify-center gap-2 shadow-[0_6px_0_rgba(0,0,0,0.8)] border-[3px] block w-full active:translate-y-[6px] active:shadow-none min-h-[64px] ${
+                  reverbActive 
+                    ? "bg-purple-950 text-purple-400 border-purple-800 shadow-[0_2px_0_rgba(0,0,0,0.8),inset_0_0_20px_rgba(168,85,247,0.4)] translate-y-[4px]" 
+                    : "bg-[#1a1a20] text-neutral-400 border-white/10 hover:text-white hover:bg-[#222]"
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${reverbActive ? 'bg-purple-400 shadow-[0_0_12px_#c084fc]' : 'bg-neutral-700'}`} />
+                <span className="block w-full text-center">REVERB</span>
+              </button>
+            </li>
+          </ul>
         </article>
       </section>
 
@@ -223,24 +231,25 @@ export default function MixerDesk({
           <div className="flex-1 h-[1px] bg-gradient-to-r from-neon-cyan/20 to-transparent" />
         </header>
 
-        <div className="grid grid-cols-2 gap-4">
+        <ul className="grid grid-cols-2 gap-4 list-none p-0 m-0 w-full">
           {transitionPresets.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => onTriggerTransition(preset.id as "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", 8)}
-              disabled={isTransitioning}
-              className={`p-5 rounded-[16px] border-[2px] transition-all flex flex-col gap-2 min-h-[96px] block w-full shadow-[0_6px_15px_rgba(0,0,0,0.6)] active:translate-y-1 active:shadow-inner ${
-                isTransitioning 
-                  ? "bg-[#111] border-[#222] opacity-40 cursor-not-allowed" 
-                  : "bg-gradient-to-b from-[#1a1a20] to-[#111] border-[#333] hover:border-white/20 hover:from-[#222] hover:to-[#1a1a20]"
-              }`}
-            >
-              <strong className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md w-full">{preset.label}</strong>
-              <span className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 w-full">{preset.desc}</span>
-            </button>
+            <li key={preset.id} className="block w-full">
+              <button
+                type="button"
+                onClick={() => onTriggerTransition(preset.id as "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", 8)}
+                disabled={isTransitioning}
+                className={`p-5 rounded-[16px] border-[2px] transition-all flex flex-col gap-2 min-h-[96px] block w-full shadow-[0_6px_15px_rgba(0,0,0,0.6)] active:translate-y-1 active:shadow-inner ${
+                  isTransitioning 
+                    ? "bg-[#111] border-[#222] opacity-40 cursor-not-allowed" 
+                    : "bg-gradient-to-b from-[#1a1a20] to-[#111] border-[#333] hover:border-white/20 hover:from-[#222] hover:to-[#1a1a20]"
+                }`}
+              >
+                <strong className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md w-full">{preset.label}</strong>
+                <span className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 w-full">{preset.desc}</span>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       </article>
 
       {/* Crossfader Area */}
