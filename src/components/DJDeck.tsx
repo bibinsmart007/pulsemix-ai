@@ -20,6 +20,8 @@ interface DJDeckProps {
   onFileDrop: (file: File) => void;
 }
 
+const DOMSpacer = () => <span className="sr-only" aria-hidden="true">{"\n\n"}</span>;
+
 export default function DJDeck({
   deckId,
   state,
@@ -116,16 +118,18 @@ export default function DJDeck({
               {formatTime(state.currentTime)}
             </div>
             <div className="text-[10px] text-neutral-500 font-mono tracking-wider">
-              -{formatTime(Math.max(0, state.duration - state.currentTime))}
+              -{formatTime(Math.max(0, state.duration - state.currentTime))}&nbsp;
             </div>
           </div>
         </div>
       </section>
 
+      <DOMSpacer />
+
       {/* 2. Metadata Row */}
       <section className="flex items-center justify-center gap-6 text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-4 py-3 rounded-xl w-full mb-6 shadow-sm">
         <div className="flex items-center gap-2">
-          <span>KEY:</span><b className="text-white text-[11px]">{state.key || '--'}</b>
+          <span>&nbsp;KEY:</span><b className="text-white text-[11px]">{state.key || '--'}&nbsp;</b>
         </div>
         <div className="w-px h-3 bg-white/10"></div>
         <div className="flex items-center gap-2">
@@ -134,9 +138,11 @@ export default function DJDeck({
         <div className="w-px h-3 bg-white/10"></div>
         <div className="flex items-center gap-2">
           <span>TIME:</span><b className={`${accentColor} text-[11px]`}>{formatTime(state.currentTime)}</b>
-          <span className="text-neutral-500">/ {formatTime(state.duration)}</span>
+          <span className="text-neutral-500">/ {formatTime(state.duration)}&nbsp;</span>
         </div>
       </section>
+
+      <DOMSpacer />
 
       {/* Waveform Visualization (Wide Full Width) */}
       <section className="bg-black/30 rounded-2xl p-6 border-2 border-dashed border-white/10 relative my-6">
@@ -188,6 +194,8 @@ export default function DJDeck({
         </div>
       </section>
       
+      <DOMSpacer />
+
       {/* 4. Platter & Pitch Fader Area */}
       <section className="bg-black/30 rounded-2xl p-6 border border-white/5 flex flex-col gap-6 relative mb-6">
         <div className="flex-1 flex items-center justify-center gap-8 py-2">
@@ -226,7 +234,7 @@ export default function DJDeck({
 
           {/* Platter Pitch Label */}
           <div className="absolute bottom-4 font-mono text-[9px] font-semibold text-neutral-500">
-            {state.pitch >= 0 ? "+" : ""}{(state.pitch * 100).toFixed(1)}%
+            {state.pitch >= 0 ? "+" : ""}{(state.pitch * 100).toFixed(1)}%&nbsp;
           </div>
         </div>
 
@@ -253,16 +261,18 @@ export default function DJDeck({
                 : "bg-transparent text-neutral-500 border-neutral-700 hover:text-white"
             }`}
           >
-            0%
+            &nbsp;0%&nbsp;
           </button>
         </div>
       </div>
       </section>
 
+      <DOMSpacer />
+
       {/* 5. Bottom Controls: Hot Cues, Loops, Transport */}
       <section className="bg-black/30 rounded-2xl p-6 border border-white/5 mt-auto">
         <fieldset className="grid grid-cols-12 gap-4">
-          <legend className="sr-only">Deck Controls</legend>
+          <legend className="sr-only">&nbsp;Deck Controls&nbsp;</legend>
           
           {/* Hot Cues (4 pads) */}
           <section className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2" aria-label="Hot Cues">

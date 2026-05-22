@@ -49,21 +49,21 @@ function ChannelStrip({
 
   return (
     <section className="flex flex-col items-center gap-6 w-full relative z-10 bg-black/30 border border-white/5 rounded-2xl py-4 px-2 shadow-inner" aria-labelledby={`ch-${deckId}-title`}>
-      <h3 id={`ch-${deckId}-title`} className="sr-only">CHANNEL {deckId} STRIP</h3>
+      <h3 id={`ch-${deckId}-title`} className="sr-only">&nbsp;CHANNEL {deckId} STRIP&nbsp;</h3>
       <div className="font-mono text-[10px] font-bold text-neutral-500 mb-2">
-        <span className={accentColor}>CH {deckId}</span>
+        <span className={accentColor}>&nbsp;CH {deckId}&nbsp;</span>
       </div>
 
       {/* EQ Knobs */}
       <fieldset className="w-full flex flex-col gap-2">
-        <legend className="sr-only">EQ Controls</legend>
+        <legend className="sr-only">&nbsp;EQ Controls&nbsp;</legend>
         {[
           { label: "HI", value: state.eqHigh, band: "high" as const },
           { label: "MID", value: state.eqMid, band: "mid" as const },
           { label: "LOW", value: state.eqLow, band: "low" as const },
         ].map(eq => (
           <div key={eq.label} className="bg-black/40 rounded-lg p-3 border border-white/5 w-full flex items-center justify-between">
-            <label className="text-[10px] font-mono text-neutral-400 font-bold w-6 text-left">{eq.label}</label>
+            <label className="text-[10px] font-mono text-neutral-400 font-bold w-6 text-left">&nbsp;{eq.label}&nbsp;</label>
             <input
               type="range"
               min="-12"
@@ -74,7 +74,7 @@ function ChannelStrip({
               className="flex-1 mx-2 h-1 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
             />
             <span className="text-[9px] font-mono text-neutral-500 w-6 text-right">
-              {eq.value > 0 ? '+' : ''}{eq.value}
+              &nbsp;{eq.value > 0 ? '+' : ''}{eq.value}&nbsp;
             </span>
           </div>
         ))}
@@ -147,6 +147,8 @@ export default function MixerDesk({
   onFilterChange,
   onVolumeChange
 }: MixerDeskProps) {
+  const DOMSpacer = () => <span className="sr-only" aria-hidden="true">{"\n\n"}</span>;
+
   const transitionPresets = [
     { id: "bass-swap", label: "Bass Swap", desc: "Swap low-ends", color: "from-neon-cyan to-blue-600" },
     { id: "echo-out", label: "Echo Out", desc: "Deep delay tail", color: "from-neon-purple to-neon-pink" },
@@ -157,6 +159,7 @@ export default function MixerDesk({
   return (
     <article aria-labelledby="mixer-title" className="glass-panel rounded-3xl p-4 border-2 border-white/10 bg-[#0a0a0c] flex flex-col gap-6 shadow-2xl relative select-none w-full max-w-sm mx-auto h-full overflow-hidden">
       <h2 id="mixer-title" className="sr-only">CENTRAL MIXER</h2>
+      <DOMSpacer />
       
       {/* Top Header: Master Vol & FX */}
       <section className="flex flex-col bg-black/30 border border-white/5 p-4 rounded-2xl gap-3 relative" aria-label="Master Controls">
@@ -209,6 +212,8 @@ export default function MixerDesk({
         </div>
       </section>
 
+      <DOMSpacer />
+
       {/* Main Channel Strips (A & B side by side) */}
       <div className="flex-1 flex justify-between px-4 relative">
         {/* Decorative center divider */}
@@ -230,6 +235,8 @@ export default function MixerDesk({
         />
       </div>
 
+      <DOMSpacer />
+
       {/* AI Automated Transitions (Collapsible or compact) */}
       <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3" aria-label="AI Transitions">
         <h4 className="text-[10px] flex items-center gap-1.5 font-mono text-neon-cyan">
@@ -249,8 +256,8 @@ export default function MixerDesk({
               }`}
             >
               <div className="w-full flex flex-col gap-1">
-                <strong className="block text-[10px] font-mono text-white font-bold tracking-wide">{preset.label}</strong>
-                <span className="block text-[8px] font-mono text-neutral-400 leading-tight">{preset.desc}</span>
+                <strong className="block text-[10px] font-mono text-white font-bold tracking-wide">&nbsp;{preset.label}&nbsp;</strong>
+                <span className="block text-[8px] font-mono text-neutral-400 leading-tight">&nbsp;{preset.desc}&nbsp;</span>
               </div>
             </button>
           ))}
@@ -271,6 +278,8 @@ export default function MixerDesk({
           </div>
         )}
       </section>
+
+      <DOMSpacer />
 
       {/* Crossfader */}
       <section className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3 pb-3 mt-8" aria-label="Crossfader">
