@@ -68,24 +68,26 @@ function PitchCard({ pitch, onPitchChange, accentBg }: { pitch: number, onPitchC
       </header>
       
       <div className="flex flex-col items-center justify-between h-[240px] w-full bg-[#111115] border border-[#1a1a20] py-4 rounded-xl shadow-[inset_0_4px_15px_rgba(0,0,0,1)] relative">
-        <div className="bg-black px-2 py-1.5 rounded text-center border border-white/5 shadow-inner mb-2 w-12">
-          <span className="text-[11px] text-neutral-300 font-mono font-bold block">+10</span>
+        <div className="bg-black px-2 py-1.5 rounded text-center border border-white/5 shadow-inner mb-2 w-12 block">
+          <span className="text-[11px] text-neutral-300 font-mono font-bold block">+10%</span>
         </div>
 
-        <input 
-          id="pitch-slider"
-          type="range"
-          min="-0.10"
-          max="0.10"
-          step="0.001"
-          value={pitch}
-          onChange={(e) => onPitchChange(parseFloat(e.target.value))}
-          className={`accent-${accentBg.replace('bg-', '')} h-32 my-1 vertical-slider appearance-none w-2.5 bg-black rounded-full border border-neutral-800 outline-none cursor-row-resize shadow-inner block`}
-          style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
-        />
+        <div className="block h-32 w-2.5 my-1">
+          <input 
+            id="pitch-slider"
+            type="range"
+            min="-0.10"
+            max="0.10"
+            step="0.001"
+            value={pitch}
+            onChange={(e) => onPitchChange(parseFloat(e.target.value))}
+            className={`accent-${accentBg.replace('bg-', '')} h-full vertical-slider appearance-none w-full bg-black rounded-full border border-neutral-800 outline-none cursor-row-resize shadow-inner block`}
+            style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
+          />
+        </div>
         
-        <div className="bg-black px-2 py-1.5 rounded text-center border border-white/5 shadow-inner mt-2 w-12">
-          <span className="text-[11px] text-neutral-300 font-mono font-bold block">-10</span>
+        <div className="bg-black px-2 py-1.5 rounded text-center border border-white/5 shadow-inner mt-2 w-12 block">
+          <span className="text-[11px] text-neutral-300 font-mono font-bold block">-10%</span>
         </div>
         
         <button 
@@ -119,24 +121,25 @@ function ControlsCard({
           <div className="flex-1 h-[1px] bg-gradient-to-r from-white/10 to-transparent" />
         </header>
         
-        <div className="grid grid-cols-2 gap-4 flex-1">
+        <div className="grid grid-cols-4 gap-3 flex-1">
           {[0, 1, 2, 3].map(i => {
             const hasCue = state.hotCues && state.hotCues[i] !== null;
             const cueColors = ["from-rose-600 to-rose-900", "from-blue-600 to-blue-900", "from-amber-500 to-amber-800", "from-emerald-500 to-emerald-800"];
             
             return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
-                className={`w-full aspect-square rounded-[16px] cursor-pointer font-mono text-[16px] font-bold transition-all flex items-center justify-center border-[3px] shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block ${
-                  hasCue 
-                    ? `bg-gradient-to-b ${cueColors[i]} text-white border-white/20 hover:brightness-110` 
-                    : 'bg-[#1a1a20] text-neutral-600 border-[#0a0a0c] hover:bg-[#222]'
-                }`}
-              >
-                {i + 1}
-              </button>
+              <React.Fragment key={i}>
+                <button
+                  type="button"
+                  onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
+                  className={`w-full aspect-square rounded-[16px] cursor-pointer font-mono text-[16px] font-bold transition-all flex items-center justify-center border-[3px] shadow-[0_6px_0_rgba(0,0,0,0.8)] active:translate-y-[6px] active:shadow-none block ${
+                    hasCue 
+                      ? `bg-gradient-to-b ${cueColors[i]} text-white border-white/20 hover:brightness-110` 
+                      : 'bg-[#1a1a20] text-neutral-600 border-[#0a0a0c] hover:bg-[#222]'
+                  }`}
+                >
+                  <span className="block w-full text-center">{i + 1}</span>
+                </button>
+              </React.Fragment>
             );
           })}
         </div>
@@ -149,7 +152,7 @@ function ControlsCard({
           <div className="flex-1 h-[1px] bg-gradient-to-r from-white/10 to-transparent" />
         </header>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 flex-1">
+        <div className="grid grid-cols-4 gap-3 flex-1">
           <button 
             type="button"
             onClick={() => onSeek(0)}

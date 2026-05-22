@@ -45,16 +45,16 @@ function ChannelStrip({
       <div className="flex-1 flex flex-col gap-6 bg-[#0a0a0c] rounded-[24px] p-6 border border-[#222] shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
         
         {/* EQ Section */}
-        <section className="flex flex-col gap-4">
-          <header className="border-b border-[#222] pb-2 mb-2">
-            <h4 className="text-[10px] font-mono font-bold text-neutral-500 tracking-[0.2em] text-center">EQ</h4>
+        <section className="flex flex-col space-y-3">
+          <header className="border-b border-[#222] pb-2 mb-1">
+            <h4 className="text-[10px] font-mono font-bold text-neutral-500 tracking-[0.2em] text-center block">EQ</h4>
           </header>
           
           {bands.map(eq => (
-            <div key={eq.label} className="bg-[#111115] rounded-[12px] p-3 border border-[#222] w-full grid grid-cols-[36px_1fr_40px] gap-4 items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
+            <div key={eq.label} className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full grid grid-cols-[40px_1fr_40px] gap-4 items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
               <label className="text-[11px] font-mono text-neutral-400 font-bold text-center block tracking-widest">{eq.label}</label>
               
-              <div className="relative w-full h-2">
+              <div className="relative w-full h-2 block">
                 <input
                   type="range"
                   min="-12"
@@ -190,7 +190,7 @@ export default function MixerDesk({
               }`}
             >
               <span className={`w-2.5 h-2.5 rounded-full ${delayActive ? 'bg-cyan-400 shadow-[0_0_12px_#22d3ee]' : 'bg-neutral-700'}`} />
-              ECHO
+              <span className="block">ECHO</span>
             </button>
             <button
               type="button"
@@ -202,7 +202,7 @@ export default function MixerDesk({
               }`}
             >
               <span className={`w-2.5 h-2.5 rounded-full ${reverbActive ? 'bg-purple-400 shadow-[0_0_12px_#c084fc]' : 'bg-neutral-700'}`} />
-              REVERB
+              <span className="block">REVERB</span>
             </button>
           </div>
         </article>
@@ -223,21 +223,21 @@ export default function MixerDesk({
           <div className="flex-1 h-[1px] bg-gradient-to-r from-neon-cyan/20 to-transparent" />
         </header>
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-2 gap-4">
           {transitionPresets.map((preset) => (
             <button
               key={preset.id}
               type="button"
               onClick={() => onTriggerTransition(preset.id as "echo-out" | "bass-swap" | "edm-rise" | "reverb-blend", 8)}
               disabled={isTransitioning}
-              className={`p-5 rounded-[16px] border-[2px] transition-all flex flex-col justify-center gap-2 min-h-[96px] block w-full shadow-[0_6px_15px_rgba(0,0,0,0.6)] active:translate-y-1 active:shadow-inner ${
+              className={`p-5 rounded-[16px] border-[2px] transition-all flex flex-col gap-2 min-h-[96px] block w-full shadow-[0_6px_15px_rgba(0,0,0,0.6)] active:translate-y-1 active:shadow-inner ${
                 isTransitioning 
                   ? "bg-[#111] border-[#222] opacity-40 cursor-not-allowed" 
                   : "bg-gradient-to-b from-[#1a1a20] to-[#111] border-[#333] hover:border-white/20 hover:from-[#222] hover:to-[#1a1a20]"
               }`}
             >
-              <strong className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md">{preset.label}</strong>
-              <span className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 mt-1">{preset.desc}</span>
+              <strong className="block text-[15px] font-bold text-white tracking-wide text-left drop-shadow-md w-full">{preset.label}</strong>
+              <span className="block text-[11px] font-mono text-neutral-400 leading-relaxed text-left border-t border-white/5 pt-2 w-full">{preset.desc}</span>
             </button>
           ))}
         </div>
