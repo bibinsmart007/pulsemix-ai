@@ -20,8 +20,6 @@ interface DJDeckProps {
   onFileDrop: (file: File) => void;
 }
 
-const DOMSpacer = () => <span className="sr-only" aria-hidden="true">{"\n\n"}</span>;
-
 export default function DJDeck({
   deckId,
   state,
@@ -104,7 +102,7 @@ export default function DJDeck({
             <div className="flex items-center gap-2 mb-1">
               <span className={`w-2 h-2 rounded-full ${state.playing ? 'animate-pulse' : ''} ${accentBg}`} />
               <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">
-                Deck&nbsp;{deckId} <span className="text-neutral-600 px-1">•</span> {state.genre || 'No Genre'}
+                Deck {deckId} <span className="text-neutral-600 px-1">•</span> {state.genre || 'No Genre'}
               </p>
             </div>
             
@@ -118,31 +116,30 @@ export default function DJDeck({
               {formatTime(state.currentTime)}
             </div>
             <div className="text-[10px] text-neutral-500 font-mono tracking-wider">
-              -{formatTime(Math.max(0, state.duration - state.currentTime))}&nbsp;
+              -{formatTime(Math.max(0, state.duration - state.currentTime))} 
             </div>
           </div>
         </div>
       </section>
 
-      <DOMSpacer />
-
-      {/* 2. Metadata Row */}
-      <section className="flex items-center justify-center gap-6 text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-4 py-3 rounded-xl w-full mb-6 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span>&nbsp;KEY:</span><b className="text-white text-[11px]">{state.key || '--'}&nbsp;</b>
+      {/* 2. Metadata Row (Compact Grid) */}
+      <section className="grid grid-cols-3 gap-2 w-full mb-6">
+        <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between shadow-sm">
+          <span className="text-[10px] text-neutral-500 font-mono font-bold">KEY</span>
+          <b className="text-white text-[11px] font-mono">{state.key || '--'}</b>
         </div>
-        <div className="w-px h-3 bg-white/10"></div>
-        <div className="flex items-center gap-2">
-          <span>BPM:</span><b className="text-white text-[11px]">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
+        <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between shadow-sm">
+          <span className="text-[10px] text-neutral-500 font-mono font-bold">BPM</span>
+          <b className="text-white text-[11px] font-mono">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
         </div>
-        <div className="w-px h-3 bg-white/10"></div>
-        <div className="flex items-center gap-2">
-          <span>TIME:</span><b className={`${accentColor} text-[11px]`}>{formatTime(state.currentTime)}</b>
-          <span className="text-neutral-500">/ {formatTime(state.duration)}&nbsp;</span>
+        <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between shadow-sm col-span-3 sm:col-span-1">
+          <span className="text-[10px] text-neutral-500 font-mono font-bold">TIME</span>
+          <div className="flex items-center gap-1 font-mono">
+            <b className={`${accentColor} text-[11px]`}>{formatTime(state.currentTime)}</b>
+            <span className="text-neutral-600 text-[10px]">/ {formatTime(state.duration)}</span>
+          </div>
         </div>
       </section>
-
-      <DOMSpacer />
 
       {/* Waveform Visualization (Wide Full Width) */}
       <section className="bg-black/30 rounded-2xl p-6 border-2 border-dashed border-white/10 relative my-6">
@@ -164,9 +161,9 @@ export default function DJDeck({
                 <div className="z-10 flex flex-col items-center gap-2 bg-neutral-900/80 border border-white/10 px-6 py-3 rounded-2xl shadow-lg cursor-pointer hover:bg-neutral-800 transition-colors">
                   <div className="flex items-center gap-2 text-neutral-300">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    <span className="text-[11px] font-bold tracking-wider">&nbsp;LOAD&nbsp;AUDIO&nbsp;FILE&nbsp;</span>
+                    <span className="text-[11px] font-bold tracking-wider"> LOAD AUDIO FILE </span>
                   </div>
-                  <span className="text-[9px] text-neutral-500 font-mono">&nbsp;Drop&nbsp;file&nbsp;here&nbsp;to&nbsp;begin&nbsp;</span>
+                  <span className="text-[9px] text-neutral-500 font-mono"> Drop file here to begin </span>
                 </div>
               </div>
             )}
@@ -174,7 +171,7 @@ export default function DJDeck({
             {state.loading && (
               <div className="absolute inset-0 flex items-center justify-center gap-2 text-[10px] text-neon-cyan font-mono animate-pulse bg-black/70">
                 <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan animate-ping" />
-                &nbsp;LOADING&nbsp;AUDIO...&nbsp;
+                 LOADING AUDIO... 
               </div>
             )}
           </div>
@@ -193,8 +190,6 @@ export default function DJDeck({
           )}
         </div>
       </section>
-      
-      <DOMSpacer />
 
       {/* 4. Platter & Pitch Fader Area */}
       <section className="bg-black/30 rounded-2xl p-6 border border-white/5 flex flex-col gap-6 relative mb-6">
@@ -234,7 +229,7 @@ export default function DJDeck({
 
           {/* Platter Pitch Label */}
           <div className="absolute bottom-4 font-mono text-[9px] font-semibold text-neutral-500">
-            {state.pitch >= 0 ? "+" : ""}{(state.pitch * 100).toFixed(1)}%&nbsp;
+            {state.pitch >= 0 ? "+" : ""}{(state.pitch * 100).toFixed(1)}% 
           </div>
         </div>
 
@@ -261,22 +256,20 @@ export default function DJDeck({
                 : "bg-transparent text-neutral-500 border-neutral-700 hover:text-white"
             }`}
           >
-            &nbsp;0%&nbsp;
+             0% 
           </button>
         </div>
       </div>
       </section>
 
-      <DOMSpacer />
-
       {/* 5. Bottom Controls: Hot Cues, Loops, Transport */}
       <section className="bg-black/30 rounded-2xl p-6 border border-white/5 mt-auto">
         <fieldset className="grid grid-cols-12 gap-4">
-          <legend className="sr-only">&nbsp;Deck Controls&nbsp;</legend>
+          <legend className="sr-only"> Deck Controls </legend>
           
           {/* Hot Cues (4 pads) */}
           <section className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2" aria-label="Hot Cues">
-            <h4 className="text-[9px] font-mono text-neutral-500 font-bold px-1 m-0">HOT&nbsp;CUES</h4>
+            <h4 className="text-[9px] font-mono text-neutral-500 font-bold px-1 m-0">HOT CUES</h4>
             <div className="grid grid-cols-4 gap-2 flex-1">
               {[0, 1, 2, 3].map(i => {
                 const hasCue = state.hotCues && state.hotCues[i] !== null;
@@ -295,15 +288,12 @@ export default function DJDeck({
                         : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
                     }`}
                   >
-                    <span>&nbsp;{i + 1}&nbsp;</span>
+                    <span> {i + 1} </span>
                   </button>
                 );
               })}
             </div>
           </section>
-
-          {/* Separator div for DOM extractors */}
-          <div aria-hidden="true" className="h-0 leading-none hidden">&nbsp;</div>
 
           {/* Transport buttons */}
           <section className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2" aria-label="Transport Controls">
@@ -313,7 +303,7 @@ export default function DJDeck({
               className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>&nbsp;CUE&nbsp;</span>
+              <span> CUE </span>
             </button>
             
             <button
@@ -326,8 +316,8 @@ export default function DJDeck({
               }`}
             >
               {state.playing 
-                ? <><Pause className="w-4 h-4 fill-current" /><span>&nbsp;PAUSE&nbsp;</span></> 
-                : <><Play className="w-4 h-4 fill-current" /><span>&nbsp;PLAY&nbsp;</span></>}
+                ? <><Pause className="w-4 h-4 fill-current" /><span> PAUSE </span></> 
+                : <><Play className="w-4 h-4 fill-current" /><span> PLAY </span></>}
             </button>
 
             <button
@@ -336,7 +326,7 @@ export default function DJDeck({
               className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
             >
               <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
-              <span>&nbsp;SYNC&nbsp;</span>
+              <span> SYNC </span>
             </button>
 
             <button
@@ -349,7 +339,7 @@ export default function DJDeck({
               }`}
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>&nbsp;LOOP&nbsp;</span>
+              <span> LOOP </span>
             </button>
           </section>
         </fieldset>
