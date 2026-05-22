@@ -63,7 +63,7 @@ function ChannelStrip({
           { label: "LOW", value: state.eqLow, band: "low" as const },
         ].map(eq => (
           <div key={eq.label} className="bg-black/40 rounded-lg p-3 border border-white/5 w-full flex items-center justify-between">
-            <label className="text-[10px] font-mono text-neutral-400 font-bold">&nbsp;{eq.label}&nbsp;</label>
+            <label className="text-[10px] font-mono text-neutral-400 font-bold w-6 text-left">{eq.label}</label>
             <input
               type="range"
               min="-12"
@@ -71,8 +71,11 @@ function ChannelStrip({
               step="0.5"
               value={eq.value}
               onChange={(e) => onEQChange(eq.band, parseFloat(e.target.value))}
-              className="w-12 h-1 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
+              className="flex-1 mx-2 h-1 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
             />
+            <span className="text-[9px] font-mono text-neutral-500 w-6 text-right">
+              {eq.value > 0 ? '+' : ''}{eq.value}
+            </span>
           </div>
         ))}
       </fieldset>
@@ -245,9 +248,10 @@ export default function MixerDesk({
                   : "bg-[#111113] border-white/10 hover:border-white/30 hover:bg-neutral-800 hover:-translate-y-0.5"
               }`}
             >
-              <strong className="text-[10px] font-mono text-white font-bold tracking-wide">&nbsp;{preset.label}&nbsp;</strong>
-              <span className="sr-only"> - </span>
-              <span className="text-[8px] font-mono text-neutral-400 leading-tight">&nbsp;{preset.desc}&nbsp;</span>
+              <div className="w-full flex flex-col gap-1">
+                <strong className="block text-[10px] font-mono text-white font-bold tracking-wide">{preset.label}</strong>
+                <span className="block text-[8px] font-mono text-neutral-400 leading-tight">{preset.desc}</span>
+              </div>
             </button>
           ))}
         </div>

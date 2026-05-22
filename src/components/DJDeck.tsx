@@ -120,18 +120,21 @@ export default function DJDeck({
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Physical Divider */}
-        <div className="w-full h-px bg-white/10 my-4"></div>
-
-        <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-3 py-1.5 rounded w-full mt-1">
-          <span>KEY:&nbsp;<b className="text-white">{state.key || '--'}</b></span>
-          <span className="text-neutral-600">&nbsp;|&nbsp;</span>
-          <span>BPM:&nbsp;<b className="text-white">{state.bpm ? state.bpm.toFixed(1) : '--'}</b></span>
-          <span className="text-neutral-600">&nbsp;|&nbsp;</span>
-          <span>
-            TIME:&nbsp;<b className={`${accentColor}`}>{formatTime(state.currentTime)}</b><span className="text-neutral-500">&nbsp;/&nbsp;{formatTime(state.duration)}</span>
-          </span>
+      {/* 2. Metadata Row */}
+      <section className="flex items-center justify-center gap-6 text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-4 py-3 rounded-xl w-full mb-6 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span>KEY:</span><b className="text-white text-[11px]">{state.key || '--'}</b>
+        </div>
+        <div className="w-px h-3 bg-white/10"></div>
+        <div className="flex items-center gap-2">
+          <span>BPM:</span><b className="text-white text-[11px]">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
+        </div>
+        <div className="w-px h-3 bg-white/10"></div>
+        <div className="flex items-center gap-2">
+          <span>TIME:</span><b className={`${accentColor} text-[11px]`}>{formatTime(state.currentTime)}</b>
+          <span className="text-neutral-500">/ {formatTime(state.duration)}</span>
         </div>
       </section>
 
@@ -185,11 +188,8 @@ export default function DJDeck({
         </div>
       </section>
       
-      {/* Physical Divider */}
-      <div className="w-full h-px bg-white/10 my-4"></div>
-
-      {/* Platter & Pitch Fader Area */}
-      <section className="bg-black/30 rounded-2xl p-6 border border-white/5 flex-1 flex flex-col gap-6 relative">
+      {/* 4. Platter & Pitch Fader Area */}
+      <section className="bg-black/30 rounded-2xl p-6 border border-white/5 flex flex-col gap-6 relative mb-6">
         <div className="flex-1 flex items-center justify-center gap-8 py-2">
         {/* Jog Wheel Platter */}
         <div className="relative w-48 h-48 rounded-full bg-neutral-950 flex items-center justify-center border-4 border-neutral-900 shadow-inner group">
@@ -257,11 +257,10 @@ export default function DJDeck({
           </button>
         </div>
       </div>
+      </section>
 
-        {/* Physical Divider */}
-        <div className="w-full h-px bg-white/10 my-6"></div>
-
-        {/* Bottom Controls: Hot Cues, Loops, Transport */}
+      {/* 5. Bottom Controls: Hot Cues, Loops, Transport */}
+      <section className="bg-black/30 rounded-2xl p-6 border border-white/5 mt-auto">
         <fieldset className="grid grid-cols-12 gap-4">
           <legend className="sr-only">Deck Controls</legend>
           
