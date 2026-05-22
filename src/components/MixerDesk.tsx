@@ -55,42 +55,49 @@ function ChannelStrip({
       </div>
 
       {/* EQ Knobs */}
-      {[
-        { label: "HI", value: state.eqHigh, band: "high" as const },
-        { label: "MID", value: state.eqMid, band: "mid" as const },
-        { label: "LOW", value: state.eqLow, band: "low" as const },
-      ].map(eq => (
-        <div key={eq.label} className="bg-black/40 rounded-lg p-2 border border-white/5 w-full flex flex-col items-center mb-1">
-          <label className="text-[9px] font-mono text-neutral-400 mb-2">&nbsp;{eq.label}&nbsp;</label>
-          <input
-            type="range"
-            min="-12"
-            max="12"
-            step="0.5"
-            value={eq.value}
-            onChange={(e) => onEQChange(eq.band, parseFloat(e.target.value))}
-            className="w-14 h-1 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
-          />
-        </div>
-      ))}
+      <fieldset className="w-full flex flex-col gap-2">
+        <legend className="sr-only">EQ Controls</legend>
+        {[
+          { label: "HI", value: state.eqHigh, band: "high" as const },
+          { label: "MID", value: state.eqMid, band: "mid" as const },
+          { label: "LOW", value: state.eqLow, band: "low" as const },
+        ].map(eq => (
+          <div key={eq.label} className="bg-black/40 rounded-lg p-3 border border-white/5 w-full flex items-center justify-between">
+            <label className="text-[10px] font-mono text-neutral-400 font-bold">&nbsp;{eq.label}&nbsp;</label>
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="0.5"
+              value={eq.value}
+              onChange={(e) => onEQChange(eq.band, parseFloat(e.target.value))}
+              className="w-12 h-1 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
+            />
+          </div>
+        ))}
+      </fieldset>
 
       {/* Filter Knob */}
-      <div className="bg-black/40 rounded-lg p-2 border border-white/5 w-full flex flex-col items-center mt-2">
-        <label className="text-[9px] font-mono text-neon-pink mb-2">&nbsp;FILTER&nbsp;</label>
-        <input
-          type="range"
-          min="-100"
-          max="100"
-          step="1"
-          value={state.filter}
-          onChange={(e) => onFilterChange(parseInt(e.target.value))}
-          className="w-14 h-1 bg-neutral-800 accent-neon-pink rounded-lg appearance-none cursor-pointer outline-none"
-        />
-        <span className={`text-[8px] mt-1 font-mono ${
-          state.filter === 0 ? "text-neutral-500" : state.filter < 0 ? "text-neon-cyan" : "text-neon-pink"
-        }`}>
-          {state.filter === 0 ? "\u00A0FLAT\u00A0" : state.filter < 0 ? `\u00A0LPF\u00A0` : `\u00A0HPF\u00A0`}
-        </span>
+      <div className="bg-black/40 rounded-lg p-3 border border-white/5 w-full flex flex-col gap-2 mt-2">
+        <div className="flex items-center justify-between w-full">
+          <label className="text-[10px] font-mono text-neon-pink font-bold">&nbsp;FLTR&nbsp;</label>
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            step="1"
+            value={state.filter}
+            onChange={(e) => onFilterChange(parseInt(e.target.value))}
+            className="w-12 h-1 bg-neutral-800 accent-neon-pink rounded-lg appearance-none cursor-pointer outline-none"
+          />
+        </div>
+        <div className="flex justify-between w-full px-1">
+          <span className="text-[7px] font-mono text-neon-cyan opacity-70">LPF</span>
+          <span className={`text-[7px] font-mono font-bold ${state.filter === 0 ? "text-neutral-500" : state.filter < 0 ? "text-neon-cyan" : "text-neon-pink"}`}>
+            &nbsp;{state.filter === 0 ? "FLAT" : state.filter < 0 ? "LOW-PASS" : "HI-PASS"}&nbsp;
+          </span>
+          <span className="text-[7px] font-mono text-neon-pink opacity-70">HPF</span>
+        </div>
       </div>
 
       {/* Volume Fader */}
@@ -149,12 +156,12 @@ export default function MixerDesk({
       <h2 id="mixer-title" className="sr-only">CENTRAL MIXER</h2>
       
       {/* Top Header: Master Vol & FX */}
-      <section className="flex items-center justify-between bg-black/30 border border-white/5 p-4 rounded-2xl gap-4 relative" aria-label="Master Controls">
+      <section className="flex flex-col bg-black/30 border border-white/5 p-4 rounded-2xl gap-3 relative" aria-label="Master Controls">
         
         {/* Master Volume */}
-        <div className="flex-1 flex flex-col gap-1.5">
-          <div className="flex justify-between items-center mb-1">
-            <span className="font-mono text-[9px] text-neutral-400 flex items-center gap-1"><Volume2 className="w-3 h-3" />&nbsp;MASTER&nbsp;</span>
+        <div className="flex flex-col gap-2 bg-black/40 p-3 rounded-xl border border-white/5">
+          <div className="flex justify-between items-center">
+            <span className="font-mono text-[10px] text-neutral-400 font-bold flex items-center gap-1"><Volume2 className="w-3 h-3" />&nbsp;MASTER&nbsp;VOL&nbsp;</span>
             {/* BPM Sync Indicator */}
             {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
               <span className="text-[8px] font-mono font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
@@ -169,33 +176,33 @@ export default function MixerDesk({
             step="0.01"
             value={masterVolume}
             onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-            className="w-full accent-white bg-neutral-800 h-1 rounded appearance-none cursor-pointer outline-none"
+            className="w-full mt-1 accent-white bg-neutral-800 h-1.5 rounded appearance-none cursor-pointer outline-none"
           />
         </div>
         
         {/* FX Toggles */}
-        <div className="flex gap-2">
-          <button
-            title="Echo Delay Effect (Tail)"
-            onClick={() => onToggleFX("delay", !delayActive)}
-            className={`px-3 py-1.5 rounded-lg text-[9px] font-mono transition-all ${
-              delayActive ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
-            }`}
-          >
-            <span>&nbsp;ECHO&nbsp;</span>
-          </button>
-          
-          <div aria-hidden="true" className="w-1"></div>
-
-          <button
-            title="Room Reverb Effect"
-            onClick={() => onToggleFX("reverb", !reverbActive)}
-            className={`px-3 py-1.5 rounded-lg text-[9px] font-mono transition-all ${
-              reverbActive ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
-            }`}
-          >
-            <span>&nbsp;RVB&nbsp;</span>
-          </button>
+        <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5">
+          <span className="font-mono text-[10px] text-neutral-400 font-bold">&nbsp;GLOBAL&nbsp;FX&nbsp;</span>
+          <div className="flex gap-2">
+            <button
+              title="Echo Delay Effect (Tail)"
+              onClick={() => onToggleFX("delay", !delayActive)}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-mono transition-all ${
+                delayActive ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
+              }`}
+            >
+              <span>&nbsp;ECHO&nbsp;</span>
+            </button>
+            <button
+              title="Room Reverb Effect"
+              onClick={() => onToggleFX("reverb", !reverbActive)}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-mono transition-all ${
+                reverbActive ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/50" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:text-white"
+              }`}
+            >
+              <span>&nbsp;RVB&nbsp;</span>
+            </button>
+          </div>
         </div>
       </section>
 

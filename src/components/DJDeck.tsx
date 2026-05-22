@@ -121,9 +121,8 @@ export default function DJDeck({
           </div>
         </div>
 
-        {/* Separator div for DOM extractors */}
-        <div className="w-full h-2"></div>
-        <span className="sr-only">{"\n"}---{"\n"}</span>
+        {/* Physical Divider */}
+        <div className="w-full h-px bg-white/10 my-4"></div>
 
         <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono bg-black/40 border border-white/5 px-3 py-1.5 rounded w-full mt-1">
           <span>KEY:&nbsp;<b className="text-white">{state.key || '--'}</b></span>
@@ -185,12 +184,12 @@ export default function DJDeck({
           )}
         </div>
       </section>
-
-      {/* Separator div for DOM extractors */}
-      <span className="sr-only">{"\n"}---{"\n"}</span>
+      
+      {/* Physical Divider */}
+      <div className="w-full h-px bg-white/10 my-4"></div>
 
       {/* Platter & Pitch Fader Area */}
-      <section className="bg-black/30 rounded-2xl p-4 border border-white/5 flex-1 flex flex-col gap-6 relative">
+      <section className="bg-black/30 rounded-2xl p-6 border border-white/5 flex-1 flex flex-col gap-6 relative">
         <div className="flex-1 flex items-center justify-center gap-8 py-2">
         {/* Jog Wheel Platter */}
         <div className="relative w-48 h-48 rounded-full bg-neutral-950 flex items-center justify-center border-4 border-neutral-900 shadow-inner group">
@@ -259,11 +258,11 @@ export default function DJDeck({
         </div>
       </div>
 
-        {/* Separator div for DOM extractors */}
-        <span className="sr-only">{"\n"}---{"\n"}</span>
+        {/* Physical Divider */}
+        <div className="w-full h-px bg-white/10 my-6"></div>
 
         {/* Bottom Controls: Hot Cues, Loops, Transport */}
-        <fieldset className="mt-8 grid grid-cols-12 gap-4">
+        <fieldset className="grid grid-cols-12 gap-4">
           <legend className="sr-only">Deck Controls</legend>
           
           {/* Hot Cues (4 pads) */}
