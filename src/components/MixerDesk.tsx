@@ -62,8 +62,8 @@ function ChannelStrip({
           { label: "MID", value: state.eqMid, band: "mid" as const },
           { label: "LOW", value: state.eqLow, band: "low" as const },
         ].map(eq => (
-          <div key={eq.label} className="bg-black/40 rounded-lg p-2.5 border border-white/5 w-full grid grid-cols-[30px_1fr_30px] gap-2 items-center shadow-sm">
-            <label className="text-[9px] font-mono text-neutral-400 font-bold text-left">{eq.label}</label>
+          <div key={eq.label} className="bg-[#0a0a0c] rounded-xl p-3.5 border border-white/10 w-full grid grid-cols-[40px_1fr_40px] gap-4 items-center shadow-md mb-2">
+            <label className="text-[10px] font-mono text-neutral-400 font-bold text-left">{eq.label}</label>
             <input
               type="range"
               min="-12"
@@ -71,9 +71,9 @@ function ChannelStrip({
               step="0.5"
               value={eq.value}
               onChange={(e) => onEQChange(eq.band, parseFloat(e.target.value))}
-              className="w-full h-1 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
+              className="w-full h-1.5 bg-neutral-800 accent-neutral-300 rounded-lg appearance-none cursor-pointer outline-none"
             />
-            <span className="text-[9px] font-mono text-neutral-500 text-right">
+            <span className="text-[10px] font-mono text-neutral-500 text-right font-bold">
               {eq.value > 0 ? '+' : ''}{eq.value}
             </span>
           </div>
@@ -162,12 +162,12 @@ export default function MixerDesk({
       <section className="flex flex-col gap-3 relative mb-2" aria-label="Master Controls">
         
         {/* Master Volume */}
-        <div className="flex flex-col gap-2 bg-black/40 p-4 rounded-xl border border-white/5 shadow-sm">
+        <div className="flex flex-col gap-3 bg-[#0a0a0c] p-5 rounded-2xl border border-white/10 shadow-md">
           <div className="flex justify-between items-center">
-            <span className="font-mono text-[10px] text-neutral-400 font-bold flex items-center gap-1.5"><Volume2 className="w-3.5 h-3.5" />MASTER VOL</span>
+            <span className="font-mono text-[11px] text-neutral-400 font-bold flex items-center gap-2"><Volume2 className="w-4 h-4" />MASTER VOL</span>
             {/* BPM Sync Indicator */}
             {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
-              <span className="text-[8px] font-mono font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
+              <span className="text-[9px] font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
                 BPM SYNCED
               </span>
             )}
@@ -179,19 +179,19 @@ export default function MixerDesk({
             step="0.01"
             value={masterVolume}
             onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-            className="w-full mt-2 accent-white bg-neutral-800 h-1.5 rounded appearance-none cursor-pointer outline-none"
+            className="w-full mt-3 accent-white bg-neutral-800 h-2 rounded appearance-none cursor-pointer outline-none"
           />
         </div>
         
         {/* FX Toggles */}
-        <div className="flex flex-col gap-2 bg-black/40 p-4 rounded-xl border border-white/5 shadow-sm">
-          <span className="font-mono text-[10px] text-neutral-400 font-bold">GLOBAL FX</span>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-3 bg-[#0a0a0c] p-5 rounded-2xl border border-white/10 shadow-md">
+          <span className="font-mono text-[11px] text-neutral-400 font-bold tracking-wider mb-1">GLOBAL FX</span>
+          <div className="grid grid-cols-2 gap-4">
             <button
               title="Echo Delay Effect (Tail)"
               onClick={() => onToggleFX("delay", !delayActive)}
-              className={`p-2 rounded-lg text-[9px] font-mono font-bold transition-all ${
-                delayActive ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-inner" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:bg-neutral-800 hover:text-white"
+              className={`p-3 rounded-xl text-[11px] font-mono font-bold transition-all shadow-inner border ${
+                delayActive ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/50" : "bg-neutral-900 text-neutral-500 border-white/10 hover:bg-neutral-800 hover:text-white"
               }`}
             >
               ECHO
@@ -199,8 +199,8 @@ export default function MixerDesk({
             <button
               title="Room Reverb Effect"
               onClick={() => onToggleFX("reverb", !reverbActive)}
-              className={`p-2 rounded-lg text-[9px] font-mono font-bold transition-all ${
-                reverbActive ? "bg-neon-purple/20 text-neon-purple border border-neon-purple/50 shadow-inner" : "bg-neutral-900 text-neutral-500 border border-white/5 hover:bg-neutral-800 hover:text-white"
+              className={`p-3 rounded-xl text-[11px] font-mono font-bold transition-all shadow-inner border ${
+                reverbActive ? "bg-neon-purple/20 text-neon-purple border-neon-purple/50" : "bg-neutral-900 text-neutral-500 border-white/10 hover:bg-neutral-800 hover:text-white"
               }`}
             >
               REVERB
@@ -235,21 +235,21 @@ export default function MixerDesk({
         <h4 className="text-[11px] flex items-center gap-2 font-mono font-bold text-neon-cyan">
           <Sparkles className="w-4 h-4" />AI TRANSITIONS
         </h4>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4 mt-2">
           {transitionPresets.map((preset) => (
             <button
               key={preset.id}
               title={preset.desc}
               onClick={() => onTriggerTransition(preset.id, 8)}
               disabled={isTransitioning}
-              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-center gap-1 shadow-md ${
+              className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-center gap-2 shadow-lg min-h-[72px] ${
                 isTransitioning 
                   ? "bg-neutral-900 border-white/5 opacity-40 cursor-not-allowed" 
-                  : "bg-black/40 border-white/10 hover:border-white/30 hover:bg-neutral-800 hover:-translate-y-0.5 active:scale-95"
+                  : "bg-[#0a0a0c] border-white/10 hover:border-white/30 hover:bg-neutral-800 hover:-translate-y-1 active:scale-95"
               }`}
             >
-              <strong className="block text-[10px] font-mono text-white font-bold tracking-wide">{preset.label}</strong>
-              <span className="block text-[8px] font-mono text-neutral-400 leading-tight">{preset.desc}</span>
+              <strong className="block text-[12px] font-mono text-white font-bold tracking-wide">{preset.label}</strong>
+              <span className="block text-[9px] font-mono text-neutral-400 leading-tight">{preset.desc}</span>
             </button>
           ))}
         </div>

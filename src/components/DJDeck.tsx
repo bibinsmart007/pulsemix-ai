@@ -111,31 +111,31 @@ export default function DJDeck({
             </h3>
           </div>
 
-          <div className="text-right flex-shrink-0">
+          <div className="text-right flex-shrink-0 bg-[#0a0a0c] p-4 rounded-xl border border-white/10 shadow-inner">
             <div className={`text-3xl font-light font-mono ${accentColor}`}>
               {formatTime(state.currentTime)}
             </div>
             <div className="text-[10px] text-neutral-500 font-mono tracking-wider">
-              -{formatTime(Math.max(0, state.duration - state.currentTime))} 
+              -{formatTime(Math.max(0, state.duration - state.currentTime))}
             </div>
           </div>
         </div>
       </section>
 
       {/* 2. Metadata Row (Compact Grid) */}
-      <section className="grid grid-cols-3 gap-2 w-full mb-6">
-        <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between shadow-sm">
+      <section className="grid grid-cols-3 gap-4 w-full mb-8">
+        <div className="bg-[#0a0a0c] border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between shadow-md">
           <span className="text-[10px] text-neutral-500 font-mono font-bold">KEY</span>
-          <b className="text-white text-[11px] font-mono">{state.key || '--'}</b>
+          <b className="text-white text-[12px] font-mono">{state.key || '--'}</b>
         </div>
-        <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between shadow-sm">
+        <div className="bg-[#0a0a0c] border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between shadow-md">
           <span className="text-[10px] text-neutral-500 font-mono font-bold">BPM</span>
-          <b className="text-white text-[11px] font-mono">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
+          <b className="text-white text-[12px] font-mono">{state.bpm ? state.bpm.toFixed(1) : '--'}</b>
         </div>
-        <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between shadow-sm col-span-3 sm:col-span-1">
+        <div className="bg-[#0a0a0c] border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between shadow-md col-span-3 sm:col-span-1">
           <span className="text-[10px] text-neutral-500 font-mono font-bold">TIME</span>
           <div className="flex items-center gap-1 font-mono">
-            <b className={`${accentColor} text-[11px]`}>{formatTime(state.currentTime)}</b>
+            <b className={`${accentColor} text-[12px]`}>{formatTime(state.currentTime)}</b>
             <span className="text-neutral-600 text-[10px]">/ {formatTime(state.duration)}</span>
           </div>
         </div>
@@ -234,8 +234,8 @@ export default function DJDeck({
         </div>
 
         {/* Pitch Slider Vertical */}
-        <div className="flex flex-col items-center h-48 w-12 bg-black/40 border border-white/5 py-4 rounded-2xl relative">
-          <span className="text-[8px] text-neutral-500 font-mono font-bold">+10</span>
+        <div className="flex flex-col items-center justify-center h-[200px] w-16 bg-[#0a0a0c] border border-white/10 py-4 rounded-2xl relative shadow-inner">
+          <span className="text-[9px] text-neutral-500 font-mono font-bold">+10</span>
           <input 
             type="range"
             min="-0.10"
@@ -243,20 +243,20 @@ export default function DJDeck({
             step="0.001"
             value={state.pitch}
             onChange={handlePitchSlider}
-            className={`accent-${accentBg.replace('bg-', '')} h-32 my-2 vertical-slider appearance-none w-1 bg-neutral-800 rounded outline-none cursor-row-resize`}
+            className={`accent-${accentBg.replace('bg-', '')} h-32 my-3 vertical-slider appearance-none w-1.5 bg-neutral-800 rounded outline-none cursor-row-resize`}
             style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any}
           />
-          <span className="text-[8px] text-neutral-500 font-mono font-bold">-10</span>
+          <span className="text-[9px] text-neutral-500 font-mono font-bold">-10</span>
           
           <button 
             onClick={() => onPitchChange(0)}
-            className={`absolute -right-8 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold ${
+            className={`absolute -right-10 top-1/2 -translate-y-1/2 px-2 py-1 rounded border text-[9px] font-mono font-bold ${
               state.pitch === 0 
                 ? "bg-neutral-800 text-neutral-400 border-neutral-700" 
-                : "bg-transparent text-neutral-500 border-neutral-700 hover:text-white"
+                : "bg-transparent text-neutral-500 border-neutral-700 hover:text-white hover:bg-neutral-800"
             }`}
           >
-             0% 
+            0%
           </button>
         </div>
       </div>
@@ -268,9 +268,9 @@ export default function DJDeck({
           <legend className="sr-only"> Deck Controls </legend>
           
           {/* Hot Cues (4 pads) */}
-          <section className="col-span-5 bg-black/40 rounded-xl p-2.5 border border-white/5 flex flex-col gap-2" aria-label="Hot Cues">
-            <h4 className="text-[9px] font-mono text-neutral-500 font-bold px-1 m-0">HOT CUES</h4>
-            <div className="grid grid-cols-4 gap-2 flex-1">
+          <section className="col-span-5 bg-[#0a0a0c] rounded-2xl p-4 border border-white/10 flex flex-col gap-3 shadow-md" aria-label="Hot Cues">
+            <h4 className="text-[10px] font-mono text-neutral-500 font-bold px-1 m-0 tracking-wider">HOT CUES</h4>
+            <div className="grid grid-cols-4 gap-3 flex-1">
               {[0, 1, 2, 3].map(i => {
                 const hasCue = state.hotCues && state.hotCues[i] !== null;
                 // Industry standard cue colors
@@ -282,13 +282,13 @@ export default function DJDeck({
                     key={i}
                     onClick={() => hasCue ? onTriggerHotCue(i) : onSetHotCue(i, state.currentTime)}
                     aria-label={`Hot Cue ${i + 1}`}
-                    className={`rounded cursor-pointer font-mono text-[11px] font-bold transition-all shadow-inner h-full min-h-[36px] ${
+                    className={`rounded-lg cursor-pointer font-mono text-[12px] font-bold transition-all shadow-inner h-full min-h-[44px] ${
                       hasCue 
                         ? `${cueColors[i]} text-black border border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.5)] ${cueShadows[i]}` 
-                        : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700'
+                        : 'bg-neutral-800/80 text-neutral-500 border border-neutral-700/50 hover:bg-neutral-700 hover:text-neutral-300'
                     }`}
                   >
-                    <span> {i + 1} </span>
+                    <span>{i + 1}</span>
                   </button>
                 );
               })}
@@ -296,50 +296,50 @@ export default function DJDeck({
           </section>
 
           {/* Transport buttons */}
-          <section className="col-span-7 bg-black/40 rounded-xl p-2.5 border border-white/5 flex gap-2" aria-label="Transport Controls">
+          <section className="col-span-7 bg-[#0a0a0c] rounded-2xl p-4 border border-white/10 grid grid-cols-4 gap-3 shadow-md" aria-label="Transport Controls">
             <button 
               onClick={() => onSeek(0)}
               disabled={!state.trackLoaded}
-              className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+              className="w-full h-full min-h-[56px] rounded-xl border border-white/10 bg-neutral-900 hover:bg-neutral-800 text-[11px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 shadow-inner"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span> CUE </span>
+              <RotateCcw className="w-4 h-4" />
+              <span>CUE</span>
             </button>
             
             <button
               onClick={state.playing ? onPause : onPlay}
               disabled={!state.trackLoaded || state.loading}
-              className={`flex-[1.5] rounded-lg border flex flex-col items-center justify-center gap-1 text-[11px] font-bold disabled:opacity-50 transition-all ${
+              className={`w-full h-full min-h-[56px] rounded-xl border flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold disabled:opacity-50 transition-all shadow-inner ${
                 state.playing
                   ? `bg-neutral-900 border-${accentColor.replace('text-', '')}/50 text-white`
                   : `${accentBg} text-black border-transparent hover:brightness-110`
               }`}
             >
               {state.playing 
-                ? <><Pause className="w-4 h-4 fill-current" /><span> PAUSE </span></> 
-                : <><Play className="w-4 h-4 fill-current" /><span> PLAY </span></>}
+                ? <><Pause className="w-5 h-5 fill-current" /><span>PAUSE</span></> 
+                : <><Play className="w-5 h-5 fill-current" /><span>PLAY</span></>}
             </button>
 
             <button
               onClick={onSync}
               disabled={state.loading || !state.trackLoaded}
-              className="flex-1 rounded-lg border border-white/5 bg-neutral-900 hover:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+              className="w-full h-full min-h-[56px] rounded-xl border border-white/10 bg-neutral-900 hover:bg-neutral-800 text-[11px] font-mono font-bold text-neutral-300 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 shadow-inner"
             >
-              <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
-              <span> SYNC </span>
+              <Zap className="w-4 h-4 text-amber-500 fill-amber-500/20" />
+              <span>SYNC</span>
             </button>
 
             <button
               onClick={() => onToggleLoop(4)}
               disabled={!state.trackLoaded}
-              className={`flex-1 rounded-lg border flex flex-col items-center justify-center gap-1 text-[10px] font-mono font-bold disabled:opacity-50 transition-all ${
+              className={`w-full h-full min-h-[56px] rounded-xl border flex flex-col items-center justify-center gap-1.5 text-[11px] font-mono font-bold disabled:opacity-50 transition-all shadow-inner ${
                 state.loopActive 
                   ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
-                  : 'bg-neutral-900 text-neutral-500 border-white/5 hover:text-white'
+                  : 'bg-neutral-900 text-neutral-500 border-white/10 hover:text-white hover:bg-neutral-800'
               }`}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span> LOOP </span>
+              <RotateCcw className="w-4 h-4" />
+              <span>LOOP</span>
             </button>
           </section>
         </fieldset>
