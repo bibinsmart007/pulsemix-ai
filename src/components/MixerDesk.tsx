@@ -53,12 +53,12 @@ function ChannelStrip({
           <ul className="flex flex-col space-y-4 list-none p-0 m-0 w-full">
             {bands.map(eq => (
               <li key={eq.label} className="w-full block">
-                <ul className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full flex items-center justify-between gap-4 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)] list-none p-0 m-0">
-                  <li className="w-[44px] shrink-0 block">
+                <div className="bg-[#111115] rounded-[12px] py-3 px-3 border border-[#222] w-full flex items-center justify-between gap-4 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)]">
+                  <div className="w-[44px] shrink-0 block">
                     <label className="text-[10px] bg-black border border-[#333] rounded px-1.5 py-1 text-neutral-400 font-bold text-center block tracking-widest shadow-inner">{eq.label}</label>
-                  </li>
+                  </div>
                   
-                  <li className="flex-1 relative h-2.5 block">
+                  <div className="flex-1 relative h-2.5 block">
                     <input
                       type="range"
                       min="-12"
@@ -69,14 +69,14 @@ function ChannelStrip({
                       className={`absolute inset-0 w-full h-full bg-black accent-${color.replace('neon-', '')}-500 rounded-full appearance-none cursor-pointer outline-none shadow-[inset_0_2px_5px_rgba(0,0,0,0.8)] block z-10`}
                     />
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-4 bg-white/20" />
-                  </li>
+                  </div>
 
-                  <li className="w-[44px] shrink-0 block">
+                  <div className="w-[44px] shrink-0 block">
                     <span className={`text-[11px] font-mono text-white text-center font-bold block rounded border py-1 shadow-[0_2px_5px_rgba(0,0,0,0.5)] w-full ${eq.value === 0 ? 'bg-[#1a1a20] border-[#333] text-neutral-400' : 'bg-gradient-to-b from-[#222] to-black border-[#444]'}`}>
                       {eq.value > 0 ? '+' : ''}{eq.value}
                     </span>
-                  </li>
-                </ul>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
