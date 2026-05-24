@@ -1,6 +1,7 @@
 import os
 import random
 import numpy as np
+import json
 
 # Krumhansl-Schmuckler key profiles for music information retrieval
 MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
@@ -64,28 +65,31 @@ def estimate_key(chroma_vector):
             best_corr = corr_min
             best_key = f"{PITCH_CLASSES[i]}m"
             
-    return best_key
+    return best_key, best_corr
 
-def analyze_audio(filepath: str) -> dict:
+class AudioAnalyzer:
     """
-    Analyzes an audio file using Librosa to compute its BPM and Camelot Key.
-    Falls back gracefully if librosa is not installed or has compilation bugs.
+    Abstraction layer for Music Information Retrieval (MIR).
+    Currently delegates to librosa, but provides a forward-compatible interface
+    for Essentia (e.g. rhythm_extractor, key_extractor).
     """
-    filename = os.path.basename(filepath)
-    
-    # Try using Librosa if imported successfully
-    try:
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+        self._y = None
+        self._sr = None
         import librosa
-        print(f"[Analyzer] Loading {filepath} for librosa analysis...")
-        
-        # Load 45 seconds of the song's middle/chorus portion for more accurate key/tempo detection
-        y, sr = librosa.load(filepath, sr=22050, duration=45, offset=15)
-        
-        # 1. BPM / Beat Tracking
-        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        # Extract scalar float
+        self.librosa = librosa
+
+    def _load_audio(self):
+        if self._y is None:
+            # Load 45 seconds of the song's middle/chorus portion for more accurate key/tempo detection
+            self._y, self._sr = self.librosa.load(self.filepath, sr=22050, duration=45, offset=15)
+
+    def extract_bpm(self) -> tuple[float, float]:
+        """Essentia-like rhythm extractor returning (bpm, confidence)"""
+        self._load_audio()
+        tempo, beats = self.librosa.beat.beat_track(y=self._y, sr=self._sr)
         bpm = float(tempo[0]) if isinstance(tempo, (np.ndarray, list)) else float(tempo)
-        bpm = round(bpm, 1)
         
         # Guard against half/double tempo octave errors (e.g. 60bpm or 240bpm)
         if bpm < 75:
@@ -93,25 +97,71 @@ def analyze_audio(filepath: str) -> dict:
         elif bpm > 150:
             bpm = bpm / 2
             
-        # 2. Key Detection
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, warning=False)
+        confidence = 0.9 if len(beats) > 10 else 0.4
+        return round(bpm, 1), confidence
+
+    def extract_key(self) -> str:
+        """Essentia-like key extractor mapped to Camelot"""
+        self._load_audio()
+        chroma = self.librosa.feature.chroma_cqt(y=self._y, sr=self._sr)
         chroma_mean = np.mean(chroma, axis=1)
-        estimated = estimate_key(chroma_mean)
+        estimated, corr = estimate_key(chroma_mean)
+        camelot = KEY_TO_CAMELOT.get(estimated, "8A")
+        if corr < 0.4:
+            return f"{camelot} (?)"
+        return camelot
+
+    def extract_waveform(self) -> str:
+        """Extracts a low-resolution amplitude envelope (200 points) for UI rendering"""
+        try:
+            # Load full audio at very low sample rate for fast envelope extraction
+            y, sr = self.librosa.load(self.filepath, sr=1000)
+            points = 200
+            hop_length = max(1, len(y) // points)
+            envelope = []
+            for i in range(0, len(y), hop_length):
+                chunk = y[i:i+hop_length]
+                envelope.append(float(np.max(np.abs(chunk))) if len(chunk) > 0 else 0.0)
+            
+            # Normalize to 0.0 - 1.0
+            max_val = max(envelope) if envelope else 1.0
+            if max_val > 0:
+                envelope = [round(v / max_val, 3) for v in envelope]
+            
+            return json.dumps(envelope)
+        except Exception as e:
+            print(f"[Analyzer] Failed to extract waveform: {e}")
+            return "[]"
+
+
+def analyze_audio(filepath: str) -> dict:
+    """Main entrypoint for backend audio analysis."""
+    print(f"[Analyzer] Starting deep audio analysis on {filepath}")
+    
+    try:
+        analyzer = AudioAnalyzer(filepath)
+        raw_bpm, bpm_confidence = analyzer.extract_bpm()
         
-        camelot = KEY_TO_CAMELOT.get(estimated, "8A") # default Am
+        bpm = 0.0 if bpm_confidence < 0.3 else raw_bpm
+        key = analyzer.extract_key()
+        waveform = analyzer.extract_waveform()
         
-        print(f"[Analyzer] librosa result: {bpm} BPM, Key: {estimated} ({camelot})")
+        
+        
+        print(f"[Analyzer] Completed: {bpm} BPM (raw {raw_bpm}), Key {key}")
         return {
             "bpm": bpm,
-            "key": camelot,
-            "key_name": KEY_TO_CAMELOT.get(estimated, "8A"),
-            "success": True
+            "raw_bpm": raw_bpm,
+            "bpm_confidence": bpm_confidence,
+            "key": key,
+            "waveform_data": waveform
         }
-        
     except Exception as e:
-        print(f"[Analyzer] Librosa analysis failed or not installed ({str(e)}).")
-        
+        print(f"[Analyzer] Failed to analyze {filepath}: {e}")
+        # Fallback to explicit unknowns instead of faking 128.0 BPM
         return {
-            "success": False,
-            "error": str(e)
+            "bpm": None,
+            "bpm_confidence": 0.0,
+            "key": None,
+            "waveform_data": "[]"
         }

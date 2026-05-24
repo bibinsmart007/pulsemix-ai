@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+__pycache__/
+*.pyc
+*.db
+public/downloads/
+public/exports/
+test.wav
+

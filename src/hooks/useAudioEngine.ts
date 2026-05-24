@@ -14,7 +14,7 @@ export function useAudioEngine() {
   const [masterVolume, setMasterVolume] = useState<number>(0.8);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const [transitionProgress, setTransitionProgress] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<string>("studio");
+  const [activeTab, setActiveTab] = useState<string>("export");
 
   const { audioCtxRef, initAudio, connectAudioElement, nodes } = useAudioNodes();
   
@@ -90,6 +90,11 @@ export function useAudioEngine() {
   const playDeck = (deck: "A" | "B") => basePlayDeck(deck, audioCtxRef.current);
   const pauseDeck = (deck: "A" | "B") => basePauseDeck(deck);
   const seekDeck = (deck: "A" | "B", seconds: number) => baseSeekDeck(deck, seconds);
+  
+  const cueDeck = (deck: "A" | "B") => {
+    pauseDeck(deck);
+    seekDeck(deck, 0);
+  };
 
   const updateBpm = (deck: "A" | "B", targetBpm: number) => {
     const setDeck = deck === "A" ? setDeckA : setDeckB;
@@ -109,9 +114,9 @@ export function useAudioEngine() {
     });
   };
 
-  const syncDecks = (source: "A" | "B") => {
-    if (source === "A") updateBpm("B", deckA.bpm);
-    else updateBpm("A", deckB.bpm);
+  const syncDecks = (deckToSync: "A" | "B") => {
+    if (deckToSync === "A") updateBpm("A", deckB.bpm);
+    else updateBpm("B", deckA.bpm);
   };
 
   const updateEQ = (deck: "A" | "B", band: "low" | "mid" | "high", db: number) => {
@@ -267,6 +272,10 @@ export function useAudioEngine() {
     const targetDeck = isAActive ? "B" : "A";
     const currentDeck = isAActive ? "A" : "B";
     
+    // Phase 2: Auto-sync target deck BPM to the current playing deck
+    const currentBpm = currentDeck === "A" ? deckA.bpm : deckB.bpm;
+    updateBpm(targetDeck, currentBpm);
+    
     playDeck(targetDeck);
 
     const automationInterval = setInterval(() => {
@@ -285,33 +294,30 @@ export function useAudioEngine() {
       } 
       else if (preset === "echo-out") {
         setCrossfader(nextCf);
-        if (progress > 0.3) {
-          updateFX("delay", true);
-          updateFilter(currentDeck, progress * 80);
+        if (step === 1) updateFX("delay", true);
+        
+        // Sweep highpass filter from 0 to 80%
+        updateFilter(currentDeck, progress * 80);
+        
+        // Fade out volume in the second half of the transition
+        if (progress > 0.5) {
+          updateDeckVolume(currentDeck, 0.8 * (1 - (progress - 0.5) * 2));
         }
-        if (progress > 0.8) updateDeckVolume(currentDeck, 0.8 * (1 - progress));
       } 
       else if (preset === "reverb-blend") {
         setCrossfader(nextCf);
-        updateFX("reverb", true);
-        if (progress > 0.9) {
-          updateFX("reverb", false);
-          updateEQ(currentDeck, "low", 0);
-          updateFilter(currentDeck, 0);
-          pauseDeck(currentDeck);
-          updateDeckVolume(currentDeck, 0.8);
-        }
+        if (step === 1) updateFX("reverb", true);
+        
+        // Cut the lows from the outgoing deck immediately to avoid muddiness
+        if (step === 10) updateEQ(currentDeck, "low", -12);
+        
+        // Slowly fade out volume
+        updateDeckVolume(currentDeck, 0.8 * (1 - progress));
       }
       else if (preset === "edm-rise") {
         setCrossfader(nextCf);
         updatePitch(currentDeck, progress * 0.12);
         updateFilter(currentDeck, progress * 70);
-        if (step === 90) {
-          pauseDeck(currentDeck);
-          updatePitch(currentDeck, 0);
-          updateFilter(currentDeck, 0);
-          updateDeckVolume(currentDeck, 0.8);
-        }
       }
 
       if (step >= steps) {
@@ -319,6 +325,29 @@ export function useAudioEngine() {
         setIsTransitioning(false);
         setTransitionProgress(100);
         setCrossfader(targetCrossfader);
+        
+        // Teardown routines for DSP
+        if (preset === "echo-out") {
+          pauseDeck(currentDeck);
+          updateFilter(currentDeck, 0);
+          updateDeckVolume(currentDeck, 0.8);
+          setTimeout(() => updateFX("delay", false), 4000);
+        } else if (preset === "reverb-blend") {
+          pauseDeck(currentDeck);
+          updateEQ(currentDeck, "low", 0);
+          updateFilter(currentDeck, 0);
+          updateDeckVolume(currentDeck, 0.8);
+          setTimeout(() => updateFX("reverb", false), 4000);
+        } else if (preset === "bass-swap") {
+          pauseDeck(currentDeck);
+          updateEQ(currentDeck, "low", 0);
+          updateEQ(targetDeck, "low", 0); // Restore target deck bass punch
+        } else if (preset === "edm-rise") {
+          pauseDeck(currentDeck);
+          updatePitch(currentDeck, 0);
+          updateFilter(currentDeck, 0);
+          updateDeckVolume(currentDeck, 0.8);
+        }
       }
     }, intervalMs);
   };
@@ -327,7 +356,7 @@ export function useAudioEngine() {
     deckA, deckB, crossfader, masterVolume, isTransitioning, transitionProgress, activeTab,
     analyserNode: nodes.analyser.current, audioContext: audioCtxRef.current,
     audioElemA: audioElemARef.current, audioElemB: audioElemBRef.current,
-    setActiveTab, setCrossfader, setMasterVolume, loadTrack, playDeck, pauseDeck, seekDeck,
+    setActiveTab, setCrossfader, setMasterVolume, loadTrack, playDeck, pauseDeck, seekDeck, cueDeck,
     updateBpm, updatePitch, syncDecks, updateEQ, updateFilter, updateStemVolume, updateDeckVolume,
     updateFX, triggerVinylStop, setHotCue, triggerHotCue, toggleLoop, triggerAutomatedTransition,
   };

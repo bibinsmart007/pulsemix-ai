@@ -48,9 +48,9 @@ export const CAMELOT_WHEEL: Record<string, KeyInfo> = {
 export function areKeysCompatible(keyA: string, keyB: string): boolean {
   if (!keyA || !keyB) return false;
   
-  // Clean keys (e.g., "8A" or "10B")
-  const kA = keyA.trim().toUpperCase();
-  const kB = keyB.trim().toUpperCase();
+  // Clean keys (e.g., "8A" or "10B") and handle (?) suffix
+  const kA = keyA.replace(" (?)", "").trim().toUpperCase();
+  const kB = keyB.replace(" (?)", "").trim().toUpperCase();
   
   if (kA === kB) return true;
   
@@ -83,7 +83,7 @@ export function areKeysCompatible(keyA: string, keyB: string): boolean {
  */
 export function getCompatibleKeys(key: string): string[] {
   if (!key) return [];
-  const cleanKey = key.trim().toUpperCase();
+  const cleanKey = key.replace(" (?)", "").trim().toUpperCase();
   const num = parseInt(cleanKey.slice(0, -1), 10);
   const letter = cleanKey.slice(-1);
   

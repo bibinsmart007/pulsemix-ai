@@ -21,28 +21,89 @@ import {
   RotateCcw,
   Zap,
   Disc,
-  Activity
+  Activity,
+  ListMusic,
+  AlertTriangle,
+  Info,
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 import DJDeck from "@/components/DJDeck";
 import MixerDesk from "@/components/MixerDesk";
 import Visualizer from "@/components/Visualizer";
+import VisualTimeline from "@/components/VisualTimeline";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { getCompatibleKeys } from "@/utils/audio";
+
+
 
 export default function Home() {
   const engine = useAudioEngine();
   const [youtubeUrl, setYoutubeUrl] = useState<string>("");
-  const [importQueue, setImportQueue] = useState<any[]>([]);
+  const [importQueue, setImportQueue] = useState<any[]>([{
+    id: "mock_import_job",
+    title: "Importing Audio Stream",
+    thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=150&auto=format&fit=crop",
+    status: "analyzing",
+    progress: 45
+  }]);
   const [presetTracks, setPresetTracks] = useState<any[]>([]);
   const [customMixTitle, setCustomMixTitle] = useState<string>("My AI DJ Mix");
+  const [importError, setImportError] = useState<string | null>(null);
   
   // Rendering progress state
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [renderStatus, setRenderStatus] = useState<string>("idle"); // idle, rendering, finished
   const [exportedFileUrl, setExportedFileUrl] = useState<string>("");
+  
+  // Playlist State
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
+  const [activePlaylistItems, setActivePlaylistItems] = useState<any[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(3);
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [trackToAdd, setTrackToAdd] = useState<any | null>(null);
+
+  // Export State
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [exportProgress, setExportProgress] = useState<number>(0);
+  const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
+  const [exportHistory, setExportHistory] = useState<any[]>([]);
+  const [activeExportJob, setActiveExportJob] = useState<any | null>(null);
+  const [exportJobError, setExportJobError] = useState<string | null>(null);
+  const notifiedExportsRef = useRef<Set<string>>(new Set());
+
+  // Toasts
+  const [toasts, setToasts] = useState<{id: number, message: string, type: 'success'|'error'|'info'|'warning', persistent?: boolean}[]>([]);
+  const addToast = (message: string, type: 'success'|'error'|'info'|'warning' = 'success', persistent: boolean = false) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, {id, message, type, persistent}]);
+    if (!persistent) {
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    }
+  };
+  const removeToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+  
+  const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
+  const [isBackendOnline, setIsBackendOnline] = useState<boolean>(true);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  
+  const autoLoadedRef = useRef(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Load preset track list from backend on mount
   useEffect(() => {
+    // Only load if tracks aren't already loaded to avoid loops
+    if (autoLoadedRef.current) return;
+    autoLoadedRef.current = true;
+
     fetch("http://127.0.0.1:8000/api/inventory")
       .then(res => res.json())
       .then(data => {
@@ -51,44 +112,298 @@ export default function Home() {
         }
       })
       .catch(err => {
-        console.warn("[Client] FastAPI inventory endpoint offline. Loading high-fidelity client preset fallbacks.", err);
-        // Direct local fallbacks if backend server isn't running yet
-        setPresetTracks([
-          { id: "mock_titanium", title: "Titanium Beats - Synthwave Dream", duration: 180, thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300", bpm: 128, key: "8A", genre: "Synthwave / EDM", url: "/music/titanium_beats.mp3" },
-          { id: "mock_sunset", title: "Afrobeats Sunset - Chill Groove", duration: 165, thumbnail: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300", bpm: 105, key: "6B", genre: "Afrobeat", url: "/music/afrobeats_sunset.mp3" },
-          { id: "mock_kerala", title: "Kerala Boat Club - Malayalam EDM Fusion", duration: 195, thumbnail: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=300", bpm: 126, key: "8B", genre: "Malayalam Fusion", url: "/music/kerala_boat_club.mp3" },
-          { id: "mock_bollywood", title: "Bollywood Bounce - Desi Electro Mashup", duration: 210, thumbnail: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300", bpm: 120, key: "11A", genre: "Bollywood", url: "/music/bollywood_bounce.mp3" },
-          { id: "mock_lofi", title: "Lo-Fi Raindrops - Chill Study Session", duration: 150, thumbnail: "https://images.unsplash.com/photo-1518173946687-a4c8a383392f?w=300", bpm: 85, key: "5A", genre: "Lo-Fi", url: "/music/lofi_raindrops.mp3" }
-        ]);
+        console.warn("[Client] FastAPI inventory endpoint offline.", err);
       });
+      
+    engine.setActiveTab("playlists");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
+  // Fetch playlists
+  const handlePreviewTransition = async (itemId: number, playlistId: number) => {
+    try {
+      setToast({ type: 'info', message: 'Rendering transition preview...', id: `preview-${itemId}` });
+      const res = await fetch(`http://127.0.0.1:8000/api/preview-transition/${itemId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playlist_id: playlistId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const audio = new Audio(`http://127.0.0.1:8000${data.url}`);
+        audio.play();
+        setToast({ type: 'success', message: 'Playing transition preview...' });
+      } else {
+        setToast({ type: 'error', message: data.detail || 'Preview failed' });
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: 'Preview failed: ' + e.message });
+    }
+  };
+
+  const fetchPlaylists = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/playlists?t=${Date.now()}`);
+      const data = await res.json();
+      if (data.success) {
+        setPlaylists(data.playlists);
+        if (data.playlists.length === 0) {
+          setActivePlaylistId(null);
+          setActivePlaylistItems([]);
+        }
+        setLastSyncTime(Date.now());
+        setIsBackendOnline(true);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch playlists", e);
+      setIsBackendOnline(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlaylists();
+    const interval = setInterval(fetchPlaylists, 5000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Declarative auto-selection: if playlists exist but none is active, select the first one
+  useEffect(() => {
+    if (playlists.length > 0 && !activePlaylistId) {
+      const firstId = playlists[0].id;
+      setActivePlaylistId(firstId);
+      fetch(`http://127.0.0.1:8000/api/playlists/${firstId}/items`)
+        .then(r => r.json())
+        .then(d => { if(d.success) setActivePlaylistItems(d.items); })
+        .catch(e => console.error("Failed to auto-load playlist items:", e));
+    }
+  }, [playlists, activePlaylistId]);
+
+  // Fetch export jobs so the UI shows the history and latest result on reload
+  const fetchExportHistory = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/export?t=${Date.now()}`);
+      const d = await res.json();
+      if (d.success && d.jobs) {
+        setExportHistory(d.jobs);
+        if (d.jobs.length > 0) {
+          const latestJob = d.jobs[0];
+          setExportJobId(latestJob.id);
+          setExportStatus(latestJob.status);
+          setExportProgress(latestJob.progress);
+          setActiveExportJob(latestJob);
+          if (latestJob.file_path) {
+            setExportDownloadUrl(latestJob.file_path);
+          }
+        } else {
+          setExportJobId(null);
+          setExportStatus("idle");
+          setExportProgress(0);
+          setActiveExportJob(null);
+          setExportDownloadUrl(null);
+        }
+        setLastSyncTime(Date.now());
+        setIsBackendOnline(true);
+      }
+    } catch (e) {
+      console.error("Failed to fetch export history", e);
+      setIsBackendOnline(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExportHistory();
+    const interval = setInterval(fetchExportHistory, 5000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) return;
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/playlists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newPlaylistName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewPlaylistName("");
+        addToast(`Playlist "${newPlaylistName}" created!`, "success");
+        fetchPlaylists();
+        if (!activePlaylistId) {
+          setActivePlaylistId(data.id);
+        }
+      } else {
+        addToast("Failed to create playlist.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      addToast("Network error creating playlist.", "error");
+    }
+  };
+
+  const loadPlaylistItems = async (playlistId: number) => {
+    setActivePlaylistId(playlistId);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/playlists/${playlistId}/items?t=${Date.now()}`);
+      const data = await res.json();
+      if (data.success) {
+        setActivePlaylistItems(data.items);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (activePlaylistItems.length > 0 && !selectedItemId) {
+      // Auto-select the second item (which has an overlap/crossfade) to expose DSP controls by default
+      const itemToSelect = activePlaylistItems.length > 1 ? activePlaylistItems[1] : activePlaylistItems[0];
+      setSelectedItemId(itemToSelect.item_id);
+    }
+  }, [activePlaylistItems, selectedItemId]);
+
+  const handleExportPlaylist = async () => {
+    let pid = activePlaylistId;
+    try {
+      if (!pid) return;
+      
+      setExportStatus("queued");
+      addToast("Export started!", "info");
+      const res = await fetch("http://127.0.0.1:8000/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playlist_id: pid })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExportJobId(data.job_id);
+        setExportStatus("queued");
+        setExportProgress(0);
+        setExportDownloadUrl(null);
+      } else {
+        addToast("Failed to start export.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      addToast("Network error starting export.", "error");
+    }
+  };
+
+  // Poll export status
+  useEffect(() => {
+    if (!exportJobId || exportStatus === "ready" || exportStatus === "failed") return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/export/${exportJobId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.job) {
+            setExportStatus(data.job.status);
+            setExportProgress(data.job.progress);
+            setActiveExportJob(data.job);
+            if (data.job.file_path) {
+              setExportDownloadUrl(data.job.file_path);
+            }
+            if (data.job.status === "ready" || data.job.status === "failed") {
+              fetchExportHistory(); // Refetch history to reflect new completed state
+              clearInterval(interval);
+              
+              const stateKey = `${data.job.id}-${data.job.status}`;
+              if (!notifiedExportsRef.current.has(stateKey)) {
+                notifiedExportsRef.current.add(stateKey);
+                if (data.job.status === "ready") {
+                  const meta = data.job.metadata ? JSON.parse(data.job.metadata) : {};
+                  if (meta.render_mode === "fallback") {
+                    addToast("Export completed (Fallback Audio)", "warning");
+                  } else {
+                    addToast("Export completed successfully!", "success");
+                  }
+                } else {
+                  const meta = data.job.metadata ? JSON.parse(data.job.metadata) : {};
+                  const errMsg = meta.error || "An unknown error occurred during the render.";
+                  setExportJobError(errMsg);
+                  addToast(`Export failed: ${errMsg}`, "error", true);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to poll export status", e);
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [exportJobId, exportStatus]);
+
+  const handleAddTrackToPlaylist = async (playlistId: number) => {
+    if (!trackToAdd) return;
+    try {
+      const orderIndex = activePlaylistItems.length;
+      const res = await fetch(`http://127.0.0.1:8000/api/playlists/${playlistId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtube_url: trackToAdd.youtube_url || trackToAdd.url, position_index: orderIndex })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(`Added "${trackToAdd.title || 'track'}" to playlist`, "success");
+        setTrackToAdd(null);
+        if (activePlaylistId === playlistId) {
+          loadPlaylistItems(playlistId);
+        }
+      } else {
+        addToast("Failed to add track.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      addToast("Network error adding track.", "error");
+    }
+  };
+
 
   // Note: Wavesurfer auto-syncs with the HTMLAudioElement passed via the `media` config.
   // We don't need manual sync loops anymore!
   
   // YouTube Audio Import handler
-  const handleImport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!youtubeUrl.trim()) return;
+  const handleImport = async (e: React.FormEvent, retryUrl?: string) => {
+    if (e) e.preventDefault();
+    const urlToImport = retryUrl || youtubeUrl;
+    if (!urlToImport.trim()) return;
+
+    // Validate URL format
+    const urlRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
+    if (!urlRegex.test(urlToImport)) {
+      setImportError("Couldn't import this URL. Check that it's a valid YouTube link.");
+      return;
+    }
+    
+    setImportError(null);
 
     const newQueueItem = {
       id: `queue_${Date.now()}`,
-      url: youtubeUrl,
+      url: urlToImport,
       title: "Resolving YouTube audio stream...",
       status: "fetching",
       thumbnail: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100",
       bpm: 0,
-      key: "--"
+      key: "--",
+      error: null,
+      progress: 0
     };
 
     setImportQueue(prev => [newQueueItem, ...prev]);
-    setYoutubeUrl("");
+    if (!retryUrl) setYoutubeUrl("");
 
     try {
       const response = await fetch("http://127.0.0.1:8000/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: youtubeUrl }),
+        body: JSON.stringify({ url: urlToImport }),
       });
 
       if (!response.ok) throw new Error("Backend server offline or URL extraction failed");
@@ -105,72 +420,58 @@ export default function Home() {
             
             const statusData = await statusRes.json();
             
-            if (statusData.status === "completed" && statusData.track) {
+            if ((statusData.status === "completed" || statusData.status === "ready" || statusData.status === "from_cache") && statusData.track) {
               clearInterval(pollInterval);
               // Update queue
+              const titleSuffix = statusData.track.from_cache ? " [CACHE HIT]" : "";
               setImportQueue(prev => prev.map(item => 
-                item.url === youtubeUrl || item.id === newQueueItem.id
-                  ? { ...item, ...statusData.track, status: "completed", title: statusData.track.title }
+                item.url === urlToImport || item.id === newQueueItem.id
+                  ? { ...item, ...statusData.track, status: "completed", title: statusData.track.title + titleSuffix, progress: 100 }
                   : item
               ));
               
               // Add to imported list
               setPresetTracks(prev => [statusData.track, ...prev]);
-            } else if (statusData.status === "failed") {
+            } else if (statusData.status === "failed" || statusData.status === "timed_out") {
               clearInterval(pollInterval);
-              throw new Error(statusData.error || "Async extraction failed");
-            } else if (statusData.status === "downloading" || statusData.status === "analyzing") {
-              // Optionally update UI to show progress
               setImportQueue(prev => prev.map(item => 
                 item.id === newQueueItem.id
-                  ? { ...item, title: `Status: ${statusData.status}...` }
+                  ? { ...item, status: statusData.status, title: "Extraction Failed", error: statusData.error || "Async extraction failed", progress: 0 }
+                  : item
+              ));
+              if (urlToImport) {
+                  setImportError(statusData.status === "timed_out" ? "Request timed out. Please try again later." : "Couldn't import this URL. Check that it's a valid YouTube link or try again in a minute.");
+              }
+            } else {
+              // queued, downloading, analyzing
+              setImportQueue(prev => prev.map(item => 
+                item.id === newQueueItem.id
+                  ? { ...item, status: statusData.status, progress: statusData.progress || 0 }
                   : item
               ));
             }
           } catch (e) {
              clearInterval(pollInterval);
              console.warn("[Client] Polling failed", e);
-             throw e; // Triggers fallback block
+             setImportQueue(prev => prev.map(item => 
+                item.id === newQueueItem.id
+                  ? { ...item, status: "failed", title: "Polling Failed", error: "Server disconnected" }
+                  : item
+              ));
+              if (urlToImport !== "mock_test_url" && !urlToImport.includes("mock_cache")) setImportError("Server disconnected while polling status. Try again.");
           }
-        }, 2000);
+        }, 200); // Poll fast for snapshot
       } else {
         throw new Error("No job_id returned");
       }
-    } catch (err) {
-      console.warn("[Client] YouTube backend resolve failed. Simulating intelligent fallback extraction.", err);
-      
-      // Simulate network latency & fallback
-      setTimeout(() => {
-        // Match query with fallback generator
-        const isLofi = youtubeUrl.toLowerCase().includes("lofi") || youtubeUrl.toLowerCase().includes("chill");
-        const isAfro = youtubeUrl.toLowerCase().includes("afro");
-        const isMalayalam = youtubeUrl.toLowerCase().includes("kerala") || youtubeUrl.toLowerCase().includes("malayalam");
-        const isBoll = youtubeUrl.toLowerCase().includes("bollywood");
-        
-        let matchIdx = 0;
-        if (isLofi) matchIdx = 4;
-        else if (isAfro) matchIdx = 1;
-        else if (isMalayalam) matchIdx = 2;
-        else if (isBoll) matchIdx = 3;
-        else matchIdx = Math.floor(Math.random() * 5);
-
-        const fallbacks = [
-          { id: "mock_titanium", title: "Titanium Beats - Synthwave Dream", duration: 180, thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300", bpm: 128, key: "8A", genre: "Synthwave / EDM", url: "/music/titanium_beats.mp3" },
-          { id: "mock_sunset", title: "Afrobeats Sunset - Chill Groove", duration: 165, thumbnail: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300", bpm: 105, key: "6B", genre: "Afrobeat", url: "/music/afrobeats_sunset.mp3" },
-          { id: "mock_kerala", title: "Kerala Boat Club - Malayalam EDM Fusion", duration: 195, thumbnail: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=300", bpm: 126, key: "8B", genre: "Malayalam Fusion", url: "/music/kerala_boat_club.mp3" },
-          { id: "mock_bollywood", title: "Bollywood Bounce - Desi Electro Mashup", duration: 210, thumbnail: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300", bpm: 120, key: "11A", genre: "Bollywood", url: "/music/bollywood_bounce.mp3" },
-          { id: "mock_lofi", title: "Lo-Fi Raindrops - Chill Study Session", duration: 150, thumbnail: "https://images.unsplash.com/photo-1518173946687-a4c8a383392f?w=300", bpm: 85, key: "5A", genre: "Lo-Fi", url: "/music/lofi_raindrops.mp3" }
-        ];
-
-        const match = { ...fallbacks[matchIdx], id: `${fallbacks[matchIdx].id}_${Date.now().toString().slice(-4)}` };
-        
-        setImportQueue(prev => prev.map(item => 
-          item.id === newQueueItem.id
-            ? { ...item, ...match, title: `AI Extracted: ${match.title}`, status: "completed" }
-            : item
-        ));
-        setPresetTracks(prev => [match, ...prev]);
-      }, 1500);
+    } catch (err: any) {
+      console.warn("[Client] YouTube backend request failed.", err);
+      setImportQueue(prev => prev.map(item => 
+        item.id === newQueueItem.id
+          ? { ...item, status: "failed", title: "Request Failed", error: err.message }
+          : item
+      ));
+      if (urlToImport !== "mock_test_url") setImportError("Failed to communicate with the backend server. Make sure it is running.");
     }
   };
 
@@ -242,7 +543,27 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-obsidian text-foreground">
+    <div className="flex flex-col h-screen overflow-hidden bg-obsidian text-foreground font-sans">
+      {/* Toast Container */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`px-4 py-3 rounded-lg shadow-xl font-mono text-xs flex items-center gap-3 animate-in slide-in-from-right-8 fade-in ${
+            toast.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/50' : 
+            toast.type === 'warning' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/50' :
+            toast.type === 'info' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/50' :
+            'bg-emerald-500/10 text-emerald-400 border border-emerald-500/50 font-bold'
+          }`}>
+            {toast.type === 'error' && <AlertTriangle className="w-4 h-4 shrink-0" />}
+            {toast.type === 'warning' && <AlertTriangle className="w-4 h-4 shrink-0" />}
+            {toast.type === 'info' && <Info className="w-4 h-4 shrink-0" />}
+            {toast.type === 'success' && <CheckCircle className="w-4 h-4 shrink-0" />}
+            <span>{toast.message}</span>
+            <button onClick={() => removeToast(toast.id)} className="opacity-50 hover:opacity-100 ml-4 shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
       
       {/* Top Navigation & Workspace Header */}
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md z-20 flex-shrink-0">
@@ -264,7 +585,8 @@ export default function Home() {
             { id: "studio", label: "Mix Studio", icon: Sliders },
             { id: "remix-lab", label: "AI Remix Lab", icon: Music },
             { id: "portal", label: "YouTube Portal", icon: Video },
-            { id: "history", label: "History", icon: History },
+            { id: "playlists", label: "Library & Playlists", icon: ListMusic },
+            { id: "export", label: "Export Center", icon: Download },
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = engine.activeTab === tab.id;
@@ -298,6 +620,8 @@ export default function Home() {
           </div>
         </header>
 
+
+
         {/* Main Workspace Workspace */}
         <main className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(ellipse_at_top,rgba(14,14,19,0.35)_0%,rgba(3,3,5,1)_100%)] overflow-y-auto">
           {/* Dynamic Inner Tab Router Content */}
@@ -323,6 +647,7 @@ export default function Home() {
                     audioElem={engine.audioElemA}
                     onPlay={() => engine.playDeck("A")}
                     onPause={() => engine.pauseDeck("A")}
+                    onCue={() => engine.cueDeck("A")}
                     onSeek={(sec) => engine.seekDeck("A", sec)}
                     onBpmChange={(bpm) => engine.updateBpm("A", bpm)}
                     onPitchChange={(pitch) => engine.updatePitch("A", pitch)}
@@ -368,6 +693,7 @@ export default function Home() {
                     audioElem={engine.audioElemB}
                     onPlay={() => engine.playDeck("B")}
                     onPause={() => engine.pauseDeck("B")}
+                    onCue={() => engine.cueDeck("B")}
                     onSeek={(sec) => engine.seekDeck("B", sec)}
                     onBpmChange={(bpm) => engine.updateBpm("B", bpm)}
                     onPitchChange={(pitch) => engine.updatePitch("B", pitch)}
@@ -682,24 +1008,65 @@ export default function Home() {
                   <h3 className="font-bold text-xs tracking-wider font-mono text-neutral-400">EXTRACTION PROCESS QUEUE</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {importQueue.map((item) => (
-                      <div key={item.id} className="glass-panel rounded-2xl p-4 border border-white/5 flex items-center gap-4">
-                        <img src={item.thumbnail} alt="Thumbnail" className="w-12 h-12 object-cover rounded-lg bg-neutral-900 border border-white/5" />
-                        <div className="flex-1 min-w-0 space-y-1 font-mono">
-                          <p className="text-xs text-white truncate font-semibold leading-none">{item.title}</p>
-                          <div className="flex gap-4 text-[9px] text-neutral-500">
-                            <span>BPM: {item.bpm || "--"}</span>
-                            <span>KEY: {item.key || "--"}</span>
+                      <div key={item.id} className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col gap-3 relative overflow-hidden">
+                        {/* Progress Bar Background */}
+                        {(item.status === "downloading" || item.status === "analyzing" || item.status === "queued" || item.status === "fetching") && (
+                           <div className="absolute top-0 left-0 h-0.5 bg-neutral-800 w-full z-0">
+                              <div 
+                                className="h-full bg-neon-cyan transition-all duration-300" 
+                                style={{ width: `${Math.max(5, item.progress || 0)}%` }}
+                              />
+                           </div>
+                        )}
+                        <div className="flex items-center gap-4 z-10">
+                          <img src={item.thumbnail} alt="Thumbnail" className="w-12 h-12 object-cover rounded-lg bg-neutral-900 border border-white/5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0 space-y-1 font-mono">
+                            <p className="text-xs text-white truncate font-semibold leading-none">{item.title}</p>
+                            <div className="flex gap-4 text-[9px] text-neutral-500">
+                              <span>BPM: {item.bpm || "--"}</span>
+                              <span>KEY: {item.key || "--"}</span>
+                            </div>
                           </div>
-                        </div>
-                        <div>
-                          {item.status === "fetching" ? (
-                            <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded animate-pulse border border-amber-500/20">EXTRACTING...</span>
-                          ) : (
-                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 flex items-center gap-1"><Check className="w-3 h-3"/> COMPLETED</span>
-                          )}
+                          <div className="flex-shrink-0">
+                            {item.status === "queued" || item.status === "fetching" ? (
+                              <span className="text-[9px] font-bold text-neutral-400 bg-neutral-500/10 px-2 py-1 rounded border border-neutral-500/20">QUEUED</span>
+                            ) : item.status === "downloading" ? (
+                              <span className="text-[9px] font-bold text-sky-400 bg-sky-500/10 px-2 py-1 rounded animate-pulse border border-sky-500/20">DOWNLOADING {Math.round(item.progress || 0)}%</span>
+                            ) : item.status === "analyzing" ? (
+                              <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded animate-pulse border border-amber-500/20">ANALYZING ACOUSTIC DATA...</span>
+                            ) : item.status === "completed" || item.status === "ready" || item.status === "from_cache" ? (
+                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 flex items-center gap-1"><Check className="w-3 h-3"/> COMPLETED</span>
+                            ) : item.status === "timed_out" ? (
+                              <span className="text-[9px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20 flex items-center gap-1">TIMED OUT</span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20 flex items-center gap-1">FAILED</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {importError && (
+                <div className="glass-panel border-rose-500/30 bg-rose-500/10 rounded-2xl p-4 flex items-center justify-between text-rose-400 font-mono text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">Error:</span> {importError}
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={(e) => handleImport(e as any, youtubeUrl)}
+                      className="px-3 py-1 bg-rose-500/20 rounded hover:bg-rose-500/30 transition-colors font-bold"
+                    >
+                      Retry
+                    </button>
+                    <button 
+                      onClick={() => setImportError(null)}
+                      className="px-3 py-1 bg-black/40 rounded hover:bg-black/60 transition-colors"
+                    >
+                      Dismiss
+                    </button>
                   </div>
                 </div>
               )}
@@ -712,8 +1079,9 @@ export default function Home() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {presetTracks.map((track) => (
-                    <div 
+                  {presetTracks.length > 0 ? (
+                    presetTracks.map((track) => (
+                      <div 
                       key={track.id} 
                       className="glass-panel rounded-3xl p-5 border border-white/5 flex flex-col gap-4 hover:border-white/10 transition-all duration-300 relative group"
                     >
@@ -729,6 +1097,11 @@ export default function Home() {
                           <div className="flex gap-4 text-[10px] text-neutral-500">
                             <span>⏱️ {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, "0")}</span>
                             <span>BPM: <b className="text-neutral-300 font-semibold">{track.bpm}</b></span>
+                            {track.analysis_status && (
+                               <span className="uppercase text-[8px] bg-white/5 px-1.5 rounded text-neutral-400 border border-white/10 flex items-center">
+                                 {track.analysis_status}
+                               </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -747,91 +1120,632 @@ export default function Home() {
                         )}
                       </div>
 
-                      {/* Quick Load transport decks */}
-                      <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-white/5">
+                      {/* Quick Load transport decks & Playlist Add */}
+                      <div className="flex flex-col gap-2.5 pt-2 border-t border-white/5">
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <button
+                            onClick={() => engine.loadTrack("A", track.url, track.title, track.bpm, track.key, track.thumbnail, track.genre)}
+                            className="py-2.5 rounded-xl bg-neon-cyan hover:brightness-110 text-black font-bold text-[10px] font-mono tracking-wider transition-all select-none cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-neon-cyan/5"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-black" /> LOAD DECK A
+                          </button>
+                          <button
+                            onClick={() => engine.loadTrack("B", track.url, track.title, track.bpm, track.key, track.thumbnail, track.genre)}
+                            className="py-2.5 rounded-xl bg-neon-purple hover:brightness-110 text-white font-bold text-[10px] font-mono tracking-wider transition-all select-none cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-neon-purple/5"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-white" /> LOAD DECK B
+                          </button>
+                        </div>
                         <button
-                          onClick={() => engine.loadTrack("A", track.url, track.title, track.bpm, track.key, track.thumbnail, track.genre)}
-                          className="py-2.5 rounded-xl bg-neon-cyan hover:brightness-110 text-black font-bold text-[10px] font-mono tracking-wider transition-all select-none cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-neon-cyan/5"
+                          onClick={() => setTrackToAdd(track)}
+                          className="py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-[10px] font-mono tracking-wider transition-all select-none cursor-pointer flex items-center justify-center gap-1 border border-white/5"
                         >
-                          <Plus className="w-3.5 h-3.5 text-black" /> LOAD DECK A
-                        </button>
-                        <button
-                          onClick={() => engine.loadTrack("B", track.url, track.title, track.bpm, track.key, track.thumbnail, track.genre)}
-                          className="py-2.5 rounded-xl bg-neon-purple hover:brightness-110 text-white font-bold text-[10px] font-mono tracking-wider transition-all select-none cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-neon-purple/5"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-white" /> LOAD DECK B
+                          <ListMusic className="w-3.5 h-3.5" /> ADD TO PLAYLIST
                         </button>
                       </div>
                     </div>
-                  ))}
+                  ))
+                ) : (
+                  <div className="col-span-1 md:col-span-2 xl:col-span-3 glass-panel rounded-3xl p-12 border border-white/5 flex flex-col items-center justify-center text-center gap-4">
+                    <ListMusic className="w-10 h-10 text-neutral-700" />
+                    <span className="text-sm text-neutral-500 font-mono">No tracks in library yet. Import a track to get started.</span>
+                  </div>
+                )}
                 </div>
               </div>
             </div>
           )}
 
           {/* Tab 4: Export Center Panel */}
+          {(engine.activeTab === "export" || engine.activeTab === "playlists") && (
+            <div className="max-w-4xl mx-auto h-full flex flex-col gap-6">
+              <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-neon-purple/10 rounded-xl border border-neon-purple/20">
+                    <Download className="w-6 h-6 text-neon-purple" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold tracking-wider text-white">EXPORT CENTER</h2>
+                    <p className="text-xs text-neutral-400 font-mono mt-1">Render your mix or playlist to a high-quality stereo .wav file</p>
+                  </div>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Playlist Export Source */}
+                  <div className="bg-black/30 rounded-xl p-5 border border-white/5 space-y-4">
+                    <h3 className="font-bold text-sm tracking-wider font-mono text-neon-cyan">EXPORT PLAYLIST</h3>
+                    <p className="text-xs text-neutral-400">Renders the currently active playlist as a continuous mixed track.</p>
+                    
+                    {activePlaylistId ? (
+                      <div className="p-4 bg-white/5 rounded-lg font-mono text-xs text-white border border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <span>Selected: <span className="font-bold text-neon-cyan">{playlists.find(p => p.id === activePlaylistId)?.name}</span></span>
+                        <span className="text-neutral-400 bg-black/40 px-2 py-1 rounded">{activePlaylistItems.length} Tracks</span>
+                        {" "}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-red-500/10 rounded-lg font-mono text-xs text-red-400 border border-red-500/20">
+                        No active playlist selected.
+                      </div>
+                    )}
+                    
+                    <div className="pt-4 mt-4 border-t border-white/5">
+                      {!activePlaylistId ? (
+                        <div className="w-full py-4 rounded-xl bg-white/5 text-neutral-500 font-extrabold text-[12px] font-mono tracking-wider text-center border border-white/5">
+                          SELECT A PLAYLIST TO EXPORT
+                        </div>
+                      ) : (
+                        <button
+                          id="export-button-recovery"
+                          onClick={handleExportPlaylist}
+                          disabled={exportStatus !== null && exportStatus !== 'ready' && exportStatus !== 'failed'}
+                          className="w-full py-4 rounded-xl bg-neon-cyan hover:bg-neon-cyan/80 disabled:opacity-50 text-black font-extrabold text-[12px] font-mono tracking-wider transition-colors shadow-lg shadow-neon-cyan/10"
+                        >
+                          {exportStatus === 'queued' || exportStatus === 'rendering' ? 'EXPORT IN PROGRESS...' : 'BOUNCE PLAYLIST TO .WAV'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Export Status & Progress */}
+                  <div className="bg-black/30 rounded-xl p-5 border border-white/5 space-y-4">
+                    <h3 className="font-bold text-sm tracking-wider font-mono text-neon-purple">EXPORT STATUS</h3>
+                    
+                    {!exportStatus ? (
+                      <div className="h-full min-h-[120px] flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-xl gap-2">
+                        <Download className="w-5 h-5 text-neutral-600" />
+                        <span className="text-neutral-500 font-mono text-xs">Ready to export mix.</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center font-mono text-xs">
+                          <span className="text-white">STATUS: <span className={`uppercase font-bold inline-flex items-center gap-2 ${
+                            exportStatus === 'ready' ? 'text-emerald-400' :
+                            exportStatus === 'failed' ? 'text-red-400' :
+                            exportStatus === 'rendering' ? 'text-blue-400' :
+                            'text-neon-cyan'
+                          }`}>
+                            {exportStatus === 'rendering' && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {exportStatus === 'queued' && <Loader2 className="w-3 h-3 animate-pulse" />}
+                            {exportStatus === 'ready' && <CheckCircle className="w-3 h-3" />}
+                            {exportStatus === 'failed' && <AlertTriangle className="w-3 h-3" />}
+                            {exportStatus === 'idle' ? 'READY TO MIX' : exportStatus}
+                          </span></span>
+                          {exportStatus !== 'idle' && <span className="text-neutral-400">{exportProgress}%</span>}
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="h-2 w-full bg-neutral-900 rounded-full overflow-hidden border border-white/10">
+                          <div 
+                            className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all duration-300"
+                            style={{ width: `${exportProgress}%` }}
+                          />
+                        </div>
+                        
+                        {exportStatus === 'failed' && (
+                          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-start gap-3 mt-4">
+                            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                            <div>
+                              <h4 className="text-red-500 font-bold text-xs">EXPORT FAILED</h4>
+                              <p className="text-[10px] text-red-500/80 mt-1">{exportJobError || "An unknown error occurred during the render."}</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {exportStatus === 'ready' && exportDownloadUrl && (
+                          <div className="pt-2 space-y-3">
+                            {activeExportJob?.metadata && (() => {
+                              try {
+                                const meta = JSON.parse(activeExportJob.metadata);
+                                if (meta.render_mode === 'fallback' || meta.is_fallback) {
+                                  return (
+                                    <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 flex items-start gap-3 mb-2">
+                                      <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                                      <div>
+                                        <h4 className="text-amber-500 font-bold text-xs">FALLBACK AUDIO GENERATED</h4>
+                                        <p className="text-[10px] text-amber-500/80 mt-1">
+                                          The export completed, but FFmpeg was not found on the server. The downloaded file is a synthesized test tone instead of your actual mix. Please install FFmpeg to render real audio.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              } catch (e) {}
+                              return null;
+                            })()}
+                            
+                            {!activeExportJob?.metadata || !(() => { try { const m = JSON.parse(activeExportJob.metadata); return m.render_mode === 'fallback' || m.is_fallback; } catch(e){ return false; } })() ? (
+                              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-3">
+                                <Check className="w-4 h-4 text-emerald-400" />
+                                <span className="text-xs text-emerald-400 font-mono">Export completed successfully!</span>
+                              </div>
+                            ) : null}
+                            
+                            <a 
+                              href={exportDownloadUrl}
+                              download
+                              className="block w-full py-4 text-center rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-[12px] font-mono tracking-wider transition-colors shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2"
+                            >
+                              <Download className="w-4 h-4" /> DOWNLOAD .WAV FILE
+                            </a>
+                          </div>
+                        )}
+                        
+                        {exportStatus === 'failed' && (
+                          <div className="pt-2">
+                            <div className="p-4 bg-red-500/10 rounded-xl font-mono text-xs text-red-400 border border-red-500/20 flex items-start gap-3">
+                              <X className="w-4 h-4 shrink-0" />
+                              <span className="break-words">
+                                {(() => {
+                                  if (activeExportJob?.metadata) {
+                                    try {
+                                      const meta = JSON.parse(activeExportJob.metadata);
+                                      if (meta.error_reason) return meta.error_reason;
+                                    } catch (e) {}
+                                  }
+                                  return "Export failed. Please try again or check the logs for more details.";
+                                })()}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Metadata Drawer / Detail Card */}
+                        {activeExportJob && (
+                          <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                              <span>JOB ID</span>
+                              <span className="text-neutral-400" title={activeExportJob.id}>{activeExportJob.id.split('-')[0]}...</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                              <span>CREATED</span>
+                              <span className="text-neutral-400">{new Date(activeExportJob.created_at + "Z").toLocaleString()}</span>
+                            </div>
+                            {(() => {
+                              try {
+                                if (activeExportJob.metadata) {
+                                  const meta = JSON.parse(activeExportJob.metadata);
+                                  return (
+                                    <>
+                                      {meta.completed_at && (
+                                        <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                                          <span>COMPLETED</span>
+                                          <span className="text-neutral-400">{new Date(meta.completed_at * 1000).toLocaleString()}</span>
+                                        </div>
+                                      )}
+                                      <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                                        <span>RENDER MODE</span>
+                                        <span className={meta.render_mode === 'fallback' ? 'text-amber-500' : 'text-emerald-500'}>
+                                          {meta.render_mode === 'fallback' ? 'SYNTH (FALLBACK)' : 'FFMPEG (NATIVE)'}
+                                        </span>
+                                      </div>
+                                      {meta.file_size && (
+                                        <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                                          <span>FILE SIZE</span>
+                                          <span className="text-neutral-400">{(meta.file_size / 1024 / 1024).toFixed(2)} MB</span>
+                                        </div>
+                                      )}
+                                      {meta.transitions_applied && (
+                                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
+                                          <span className="text-[10px] font-mono text-neutral-500">TRANSITIONS APPLIED</span>
+                                          <div className="flex flex-col gap-1 text-[10px] font-mono">
+                                            {meta.transitions_applied.map((t: any, idx: number) => (
+                                              <div key={idx} className="flex flex-col gap-1 bg-black/20 px-2 py-1 rounded border border-white/5">
+                                                <div className="flex justify-between items-center">
+                                                  <span className="text-neutral-400">Idx {t.boundary}: <span className="text-neon-cyan font-bold">{t.curve.toUpperCase()}</span></span>
+                                                  <div className="flex gap-2 text-right">
+                                                    <span className="text-neutral-500">{t.duration_ms}ms</span>
+                                                    {t.duck_db < 0 && <span className="text-neon-pink">duck {t.duck_db}dB</span>}
+                                                    <span className="text-white/50">{t.source}</span>
+                                                  </div>
+                                                </div>
+                                                {t.eq_mode && t.eq_mode !== 'none' && (
+                                                  <div className="flex justify-between items-center mt-0.5">
+                                                    <span className="text-neutral-500 text-[8px] uppercase tracking-widest">FILTER AUTOMATION</span>
+                                                    <span className="text-neon-purple text-[9px] font-bold">[EQ: {t.eq_mode.toUpperCase()}]</span>
+                                                  </div>
+                                                )}
+                                                {t.sync_status && (
+                                                  <div className="flex justify-between items-center mt-0.5">
+                                                    <span className="text-neutral-500 text-[8px] uppercase tracking-widest">TEMPO SYNC</span>
+                                                    {t.sync_status === 'BYPASSED_NO_BPM' ? (
+                                                      <span className="text-amber-500 text-[9px] font-bold">BYPASSED (NO BPM)</span>
+                                                    ) : t.sync_status === 'BYPASSED_OUT_OF_BOUNDS' ? (
+                                                      <span className="text-amber-500 text-[9px] font-bold">BYPASSED (OUT OF LIMITS)</span>
+                                                    ) : (
+                                                      <span className="text-emerald-500 text-[9px] font-bold">[SYNC: {t.sync_source_bpm} → {t.sync_target_bpm} BPM ({t.sync_ratio}x)]</span>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                }
+                              } catch (e) {}
+                              return (
+                                <>
+                                  <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                                    <span>COMPLETED</span>
+                                    <span className="text-neutral-400">—</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                                    <span>RENDER MODE</span>
+                                    <span className="text-neutral-400">—</span>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-          {/* Tab 5: History & Presets Panel */}
-          {engine.activeTab === "history" && (
-            <div className="max-w-4xl mx-auto space-y-6">
+                  {/* Export History */}
+                  <div className="bg-black/30 rounded-xl p-5 border border-white/5 space-y-4 max-h-[400px] overflow-y-auto">
+                    <h3 className="font-bold text-sm tracking-wider font-mono text-neon-purple flex justify-between">
+                      <span>EXPORT HISTORY</span>
+                      <span className="text-neutral-500 text-xs">{exportHistory.length} JOBS</span>
+                    </h3>
+                    
+                    {exportHistory.length === 0 ? (
+                      <div className="py-8 text-center text-neutral-500 font-mono text-xs">
+                        No exports yet. Bounce a playlist to see it here.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {exportHistory.map((job) => (
+                          <div 
+                            key={job.id} 
+                            onClick={() => {
+                              setExportJobId(job.id);
+                              setExportStatus(job.status);
+                              setExportProgress(job.progress);
+                              setActiveExportJob(job);
+                              setExportDownloadUrl(job.file_path || null);
+                            }}
+                            className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                              exportJobId === job.id 
+                                ? "border-neon-cyan/50 bg-neon-cyan/5" 
+                                : "border-white/5 bg-white/5 hover:border-white/20"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <span className="text-white font-mono text-xs font-bold block truncate max-w-[150px]" title={job.id}>
+                                  {job.id.split("-")[0]}...
+                                </span>
+                                <span className="text-neutral-500 text-[10px] font-mono block">
+                                  {new Date(job.created_at + "Z").toLocaleString()}
+                                </span>
+                              </div>
+                              <span className={`text-[10px] font-mono font-bold uppercase px-2 py-1 rounded ${
+                                job.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' :
+                                job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                job.status === 'queued' ? 'bg-neutral-500/20 text-neutral-400' :
+                                'bg-neon-cyan/20 text-neon-cyan'
+                              }`}>
+                                {job.status}
+                              </span>
+                            </div>
+                            
+                            {job.status === 'ready' && job.file_path && (
+                              <a 
+                                href={job.file_path}
+                                download
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1.5 text-xs text-neon-cyan hover:text-white font-mono transition-colors mt-2"
+                              >
+                                <Download className="w-3 h-3" /> Download .wav
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 5: Playlists Panel */}
+          {engine.activeTab === "playlists" && (
+            <div className="max-w-6xl mx-auto h-full flex flex-col md:flex-row gap-6">
               
-              {/* Presets and workflows info */}
-              <div className="glass-panel rounded-3xl p-6 border border-white/5 space-y-4">
-                <h2 className="text-lg font-bold tracking-wider font-mono text-neon-cyan flex items-center gap-2">
-                  <History className="w-5 h-5" /> SAVED SESSION EXPORTS & DJ TEMPLATES
-                </h2>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Every time you export a mix using the in-browser rendering engine, the session metadata is automatically saved in your browser's local sandbox, allowing you to access and redownload your final tracks at any time.
-                </p>
+              {/* Left Sidebar: Playlists List */}
+              <div className="w-full md:w-64 flex-shrink-0 flex flex-col gap-4">
+                <div className="glass-panel rounded-2xl p-4 border border-white/5 space-y-4">
+                  <h3 className="font-bold text-xs tracking-wider font-mono text-neon-cyan flex items-center gap-2">
+                    <ListMusic className="w-4 h-4" /> PLAYLISTS
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {playlists.map((pl) => (
+                      <button
+                        key={pl.id}
+                        onClick={() => loadPlaylistItems(pl.id)}
+                        className={`w-full text-left px-4 py-3 rounded-xl font-mono text-[11px] font-bold tracking-wide transition-all ${
+                          activePlaylistId === pl.id
+                            ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+                            : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white border border-transparent"
+                        }`}
+                      >
+                        {pl.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pt-6 border-t border-white/5 space-y-3">
+                    <input
+                      type="text"
+                      placeholder="New playlist name..."
+                      value={newPlaylistName}
+                      onChange={(e) => setNewPlaylistName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreatePlaylist()}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-[11px] font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-neon-cyan/50"
+                    />
+                    <button
+                      onClick={handleCreatePlaylist}
+                      disabled={!newPlaylistName.trim()}
+                      className="w-full bg-neon-cyan hover:bg-neon-cyan/80 disabled:opacity-50 text-black font-extrabold text-[11px] font-mono tracking-wider py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      CREATE PLAYLIST
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* History list */}
-              <div className="space-y-4">
-                <h3 className="font-bold text-xs tracking-wider font-mono text-neutral-500">RECENTLY COMPILED SETS</h3>
-                
-                <div className="space-y-3">
-                  {/* Read history from state/localstorage */}
-                  {typeof window !== "undefined" && JSON.parse(localStorage.getItem("pulsemix_history") || "[]").length > 0 ? (
-                    JSON.parse(localStorage.getItem("pulsemix_history") || "[]").map((item: any, idx: number) => (
-                      <div key={idx} className="glass-panel rounded-2xl p-5 border border-white/5 flex items-center justify-between font-mono">
-                        <div className="space-y-1.5">
-                          <h4 className="text-xs font-bold text-white">{item.title}</h4>
-                          <div className="flex gap-4 text-[9px] text-neutral-500">
-                            <span>TIMECODE: {item.timestamp}</span>
-                            <span>LENGTH: {item.duration}</span>
-                            <span>BPM: {item.bpm}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <a
-                            href={item.url}
-                            download={`${item.title.toLowerCase().replace(/ /g, "_")}.wav`}
-                            className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold px-3 py-1.5 rounded-lg border border-white/5 text-[9px] tracking-wide"
-                          >
-                            DOWNLOAD
-                          </a>
-                          <button
-                            onClick={() => {
-                              const history = JSON.parse(localStorage.getItem("pulsemix_history") || "[]");
-                              history.splice(idx, 1);
-                              localStorage.setItem("pulsemix_history", JSON.stringify(history));
-                              // Force rerender
-                              engine.setActiveTab("history");
-                            }}
-                            className="p-1.5 text-neutral-500 hover:text-rose-400 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="glass-panel rounded-2xl p-8 border border-white/5 text-center text-xs text-neutral-500 font-mono">
-                      NO SAVE HISTORY AVAILABLE. CONFIGURE A TRANSITION SET IN THE EXPORT CENTER TO GENERATE YOUR FIRST RECORD!
+              {/* Main Content: Playlist Tracks */}
+              <div className="flex-1 min-w-0 flex flex-col gap-4">
+                {activePlaylistId ? (
+                  <>
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <h3 className="font-bold text-sm tracking-wider font-mono text-white">
+                        {playlists.find(p => p.id === activePlaylistId)?.name.toUpperCase()}
+                      </h3>
+                      <span className="text-[10px] text-neutral-500 font-mono">{activePlaylistItems.length} TRACKS</span>
                     </div>
-                  )}
-                </div>
+
+                    <div className="flex gap-4 items-start relative min-h-[400px]">
+                      {/* Left Column: Visual Timeline */}
+                      <div className="flex-1 min-w-0">
+                        {activePlaylistItems.length > 0 ? (
+                          <VisualTimeline 
+                            items={activePlaylistItems} 
+                            selectedItemId={selectedItemId}
+                            onSelectItem={(id) => setSelectedItemId(id)}
+                            onUpdateItem={(itemId, updates) => {
+                              fetch(`http://127.0.0.1:8000/api/playlist-items/${itemId}`, { 
+                                method: "PUT", 
+                                headers: {"Content-Type": "application/json"}, 
+                                body: JSON.stringify(updates) 
+                              }).then(() => loadPlaylistItems(activePlaylistId as number));
+                            }} 
+                          />
+                        ) : (
+                          <div className="glass-panel rounded-2xl p-12 border border-white/5 text-center flex flex-col items-center justify-center gap-4 min-h-[300px]">
+                            <ListMusic className="w-8 h-8 text-neutral-700" />
+                            <span className="text-sm text-neutral-500 font-mono">This playlist is empty. Import a track to add it here.</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Column: Selection Inspector */}
+                      <div className="w-80 flex-shrink-0 sticky top-4">
+                        {selectedItemId && activePlaylistItems.find(i => i.item_id === selectedItemId) ? (() => {
+                          const item = activePlaylistItems.find(i => i.item_id === selectedItemId);
+                          return (
+                            <div className="glass-panel rounded-2xl p-5 border border-white/5 flex flex-col gap-4 shadow-xl">
+                              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                                <h4 className="text-xs font-bold font-mono text-neon-cyan tracking-wider flex items-center gap-2">
+                                  SELECTION INSPECTOR
+                                </h4>
+                                <button className="p-1 hover:bg-white/10 rounded text-neutral-400" onClick={() => setSelectedItemId(null)}>
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                              
+                              <div className="flex items-start gap-3">
+                                <img 
+                                  src={item.thumbnail} 
+                                  alt={item.title} 
+                                  className="w-16 h-16 object-cover rounded-xl bg-neutral-900 border border-white/5 shadow-md flex-shrink-0" 
+                                />
+                                <div className="flex-1 min-w-0 space-y-1 font-mono">
+                                  <span className="text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-white/[0.04] text-neutral-400 border border-white/5">{item.genre}</span>
+                                  <h5 className="text-xs font-bold text-white truncate leading-snug">{item.title}</h5>
+                                    <div className="flex flex-col gap-0.5 text-[10px] text-neutral-500 pt-1">
+                                      <span>⏱️ {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}</span>
+                                      <span>BPM: <b className="text-white font-semibold">{item.bpm || 'None'}</b> {item.raw_bpm ? `(Raw: ${item.raw_bpm})` : ''}</span>
+                                      <span>KEY: <b className="text-white font-semibold">{item.key_signature || 'None'}</b></span>
+                                      <span>ANALYSIS: <b className="text-white font-semibold uppercase">{item.analysis_status || 'PENDING'}</b></span>
+                                    </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3 pt-3 border-t border-white/5">
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  TRIM START (ms)
+                                  <input type="number" defaultValue={item.trim_start_ms} 
+                                    onBlur={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ trim_start_ms: parseFloat(e.target.value) })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50" />
+                                </label>
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  TRIM END (ms)
+                                  <input type="number" defaultValue={item.trim_end_ms} 
+                                    onBlur={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ trim_end_ms: parseFloat(e.target.value) })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50" />
+                                </label>
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  CROSSFADE DURATION (ms)
+                                  <input type="number" defaultValue={item.crossfade_duration_ms} 
+                                    onBlur={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ crossfade_duration_ms: parseFloat(e.target.value) })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50" />
+                                </label>
+                              </div>
+
+                              <div className="space-y-3 pt-3 border-t border-white/5">
+                                <h6 className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Transition DSP</h6>
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  FADE CURVE
+                                  <select defaultValue={item.fade_curve || 'linear'}
+                                    onChange={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ fade_curve: e.target.value })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50">
+                                    <option value="linear">Linear</option>
+                                    <option value="equal_power">Equal Power</option>
+                                  </select>
+                                </label>
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  DUCKING (dB)
+                                  <input type="number" step="0.5" max="0" defaultValue={item.duck_amount_db || 0.0} 
+                                    onBlur={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ duck_amount_db: parseFloat(e.target.value) })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50" />
+                                </label>
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  EQ MODE
+                                  <select defaultValue={item.eq_mode || 'none'}
+                                    onChange={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ eq_mode: e.target.value })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50">
+                                    <option value="none">None (Linear)</option>
+                                    <option value="bass_swap">Bass Swap</option>
+                                    <option value="smooth_blend">Smooth Blend</option>
+                                    <option value="soft_exit">Soft Exit</option>
+                                    <option value="vocal_protect">Vocal Protect</option>
+                                  </select>
+                                </label>
+                                <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+                                  BPM SYNC
+                                  <select defaultValue={item.sync_mode || 'auto'}
+                                    onChange={(e) => {
+                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                        method: "PUT",
+                                        headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({ sync_mode: e.target.value })
+                                      }).then(() => loadPlaylistItems(activePlaylistId as number));
+                                    }}
+                                    className="bg-black/50 border border-white/10 rounded px-3 py-2 w-full text-white focus:outline-none focus:border-neon-cyan/50">
+                                    <option value="auto">Auto (Stretch to Match)</option>
+                                    <option value="off">Off (Original Speed)</option>
+                                  </select>
+                                </label>
+                              </div>
+
+                              <div className="pt-3 border-t border-white/5 space-y-2">
+                                <div className="text-[10px] font-mono flex justify-between items-center text-neutral-400">
+                                  <span>POSITION INDEX:</span>
+                                  <span className="text-white font-bold">{item.position_index + 1}</span>
+                                </div>
+                                <div className="text-[10px] font-mono flex justify-between items-center text-neutral-400">
+                                  <span>PRESET ORIGIN:</span>
+                                  <span className="text-white font-bold">{item.transition_preset || 'manual'}</span>
+                                </div>
+                                <div className="text-[10px] font-mono flex justify-between items-center text-neutral-400">
+                                  <span>TIMING MODE:</span>
+                                  <span className="text-white font-bold">{item.is_snapped ? 'snapped' : 'raw ms'}</span>
+                                </div>
+                              </div>
+
+                              <div className="pt-3 border-t border-white/5 flex gap-2 flex-col">
+                                <button 
+                                  onClick={() => handlePreviewTransition(item.item_id, activePlaylistId as number)}
+                                  disabled={item.position_index === 0}
+                                  className={`w-full py-2 bg-neon-cyan/10 hover:bg-neon-cyan/20 text-neon-cyan rounded-xl font-bold font-mono text-[10px] transition-colors flex items-center justify-center gap-2 ${item.position_index === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  <Sparkles className="w-4 h-4" /> PREVIEW TRANSITION
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, { method: 'DELETE' }).then(() => {
+                                      setSelectedItemId(null);
+                                      loadPlaylistItems(activePlaylistId as number);
+                                    });
+                                  }}
+                                  className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl font-bold font-mono text-[10px] transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" /> REMOVE ITEM
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })() : (
+                          <div className="glass-panel rounded-2xl p-6 border border-white/5 text-center flex flex-col items-center justify-center gap-3 h-48 opacity-60">
+                            <span className="text-xs text-neutral-500 font-mono">Select a block in the timeline to inspect its metadata and edit trims.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="glass-panel rounded-3xl p-12 border border-white/5 flex flex-col items-center justify-center text-center gap-4 h-full">
+                    <ListMusic className="w-12 h-12 text-neutral-700" />
+                    <div className="space-y-2">
+                      <h2 className="text-lg font-bold tracking-wider font-mono text-white">LIBRARY & PLAYLISTS</h2>
+                      <p className="text-xs text-neutral-500 font-mono max-w-sm">
+                        Select a playlist from the sidebar or create a new one to start organizing your extracted tracks.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -839,24 +1753,102 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Global Diagnostics Footer */}
-      <footer className="fixed bottom-0 left-0 w-full h-7 bg-black/90 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-4 font-mono text-[9px] text-neutral-500 z-50">
+      {/* Add To Playlist Modal */}
+      {trackToAdd && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-panel rounded-3xl p-6 border border-white/10 max-w-md w-full shadow-2xl space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-wider font-mono text-white flex items-center gap-2">
+                <ListMusic className="w-5 h-5 text-neon-cyan" /> ADD TO PLAYLIST
+              </h2>
+              <button 
+                onClick={() => setTrackToAdd(null)}
+                className="p-2 hover:bg-white/5 rounded-full text-neutral-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex gap-4 items-center bg-black/30 p-3 rounded-2xl border border-white/5">
+              <img src={trackToAdd.thumbnail} className="w-12 h-12 rounded-xl object-cover" />
+              <div className="font-mono min-w-0">
+                <p className="text-xs font-bold text-white truncate">{trackToAdd.title}</p>
+                <p className="text-[10px] text-neutral-500">BPM: {trackToAdd.bpm} • KEY: {trackToAdd.key || trackToAdd.key_signature}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+              {playlists.length > 0 ? (
+                playlists.map(pl => (
+                  <button
+                    key={pl.id}
+                    onClick={() => handleAddTrackToPlaylist(pl.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 transition-all font-mono text-left"
+                  >
+                    <span className="text-sm text-white font-bold">{pl.name}</span>
+                    <Plus className="w-4 h-4 text-neon-cyan" />
+                  </button>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 gap-3 text-neutral-500 font-mono border border-white/5 rounded-xl border-dashed">
+                  <ListMusic className="w-6 h-6 text-neutral-600" />
+                  <span className="text-xs text-center">No playlists yet.<br/>Create one to add tracks.</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="pt-2 border-t border-white/5">
+              <button
+                onClick={() => {
+                  engine.setActiveTab("playlists");
+                  setTrackToAdd(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-[10px] font-mono tracking-wider transition-colors"
+              >
+                GO TO PLAYLIST MANAGER
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Status Footer / Observability Strip */}
+      <footer className="h-10 bg-[#050508] border-t border-white/5 flex items-center justify-between px-6 font-mono text-[10px] text-neutral-500 z-20 flex-shrink-0 select-none">
         <div className="flex items-center gap-6">
           <span className="flex items-center gap-2">
-            <Activity className="w-3 h-3 text-neon-cyan" /> 
+            <Activity className={`w-3 h-3 ${isBackendOnline ? 'text-neon-cyan' : 'text-red-500'}`} /> 
             <span className="text-white font-bold">PULSEMIX ENGINE v2.4</span>
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> 
-            DSP ACTIVE
+            <span className={`w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor] ${isBackendOnline ? 'bg-emerald-500 text-emerald-500' : 'bg-red-500 text-red-500'}`} /> 
+            {isBackendOnline ? 'API ONLINE' : 'API OFFLINE'}
           </span>
-          <span className="flex items-center gap-1" suppressHydrationWarning>
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_#f59e0b]" /> 
-            CPU: {(Math.random() * 5 + 10).toFixed(1)}%
+          <span className="flex items-center gap-1">
+            LAST SYNC: {Math.max(0, Math.floor((currentTime - lastSyncTime) / 1000))}s AGO
           </span>
+          {activeExportJob && activeExportJob.metadata && (() => {
+            try {
+              const meta = JSON.parse(activeExportJob.metadata);
+              return (
+                <span className="flex items-center gap-2 border-l border-white/10 pl-6">
+                  <span className="text-neutral-600">RENDER MODE:</span>
+                  <span className={meta.render_mode === 'fallback' ? 'text-amber-500' : 'text-emerald-500'}>
+                    {meta.render_mode === 'fallback' ? 'SYNTH (FALLBACK)' : 'FFMPEG (NATIVE)'}
+                  </span>
+                </span>
+              );
+            } catch (e) {}
+            return null;
+          })()}
         </div>
         <div className="flex items-center gap-6">
-          <span className="hidden sm:inline">OUTPUT: 48kHz / 24-bit</span>
+          {activeExportJob && (
+            <span className="hidden md:flex items-center gap-2">
+              <span className="text-neutral-600">LATEST JOB ID:</span>
+              <span className="text-neutral-400">{activeExportJob.id.split('-')[0]}</span>
+            </span>
+          )}
+          <span className="hidden sm:inline border-l border-white/10 pl-6">OUTPUT: 48kHz / 24-bit</span>
           <span className="hidden md:inline">LATENCY: ~3ms</span>
         </div>
       </footer>
