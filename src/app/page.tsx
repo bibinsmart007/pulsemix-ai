@@ -61,6 +61,24 @@ export default function Home() {
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [activePlaylistItems, setActivePlaylistItems] = useState<any[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(3);
+  const [recommendations, setRecommendations] = useState<any[]>([{
+    track: {
+      title: "Electronic Sunset (128 BPM)",
+      thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=150",
+      bpm: 128.0,
+      key_signature: "8A"
+    },
+    score: 80,
+    reasons: ["✓ Perfect Key Match (8A)", "✓ Seamless Tempo (0.0% drift)", "✓ Ideal for Smooth Blend"],
+    suggestion: {
+      sync_mode: "off",
+      fade_curve: "equal_power",
+      eq_mode: "smooth_blend",
+      crossfade_duration_ms: 4000,
+      duck_amount_db: 0.0
+    }
+  }]);
+  const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [trackToAdd, setTrackToAdd] = useState<any | null>(null);
 
@@ -1724,7 +1742,93 @@ export default function Home() {
                                 >
                                   <Trash2 className="w-4 h-4" /> REMOVE ITEM
                                 </button>
+                                
+                                {/* Phase 11: Suggest Next Track */}
+                                <button 
+                                  onClick={() => {
+                                    setIsSuggesting(true);
+                                    fetch(`http://127.0.0.1:8000/api/recommendations?base_youtube_url=${encodeURIComponent(item.youtube_url)}`)
+                                      .then(r => r.json())
+                                      .then(data => {
+                                        if(data.success) {
+                                          setRecommendations(data.recommendations);
+                                        }
+                                        setIsSuggesting(false);
+                                      })
+                                      .catch(() => setIsSuggesting(false));
+                                  }}
+                                  disabled={isSuggesting}
+                                  className="w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl font-bold font-mono text-[10px] transition-colors flex items-center justify-center gap-2 mt-2"
+                                >
+                                  <Sparkles className="w-4 h-4" /> {isSuggesting ? 'SCORING TRACKS...' : 'SUGGEST NEXT TRACK'}
+                                </button>
                               </div>
+
+                              {/* Phase 11: Recommendation Panel */}
+                              {recommendations.length > 0 && (
+                                <div className="mt-4 border border-amber-500/20 bg-amber-500/5 rounded-xl p-3 flex flex-col gap-3 relative">
+                                  <button 
+                                    onClick={() => setRecommendations([])} 
+                                    className="absolute top-2 right-2 text-neutral-400 hover:text-white"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                  <h4 className="text-[10px] font-bold font-mono text-amber-400 tracking-wider">HARMONIC SUGGESTIONS</h4>
+                                  <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                                    {recommendations.map((rec, idx) => (
+                                      <div key={idx} className="bg-black/60 rounded-lg p-2 border border-white/5 flex flex-col gap-2">
+                                        <div className="flex gap-2">
+                                          <img src={rec.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=150'} alt="thumb" className="w-10 h-10 object-cover rounded bg-neutral-900 border border-white/10" />
+                                          <div className="flex-1 min-w-0 font-mono space-y-0.5">
+                                            <p className="text-[10px] font-bold text-white truncate">{rec.track.title}</p>
+                                            <div className="flex gap-2 text-[9px] text-neutral-400">
+                                              <span>BPM: {rec.track.bpm || '--'}</span>
+                                              <span>KEY: {rec.track.key_signature || '--'}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1 text-[9px] font-mono">
+                                          {rec.reasons.map((r: string, ridx: number) => (
+                                            <span key={ridx} className={`flex items-center gap-1 ${r.includes('⚠️') ? 'text-red-400' : 'text-emerald-400'}`}>
+                                              {r.includes('⚠️') ? '' : '✓'} {r}
+                                            </span>
+                                          ))}
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            fetch(`http://127.0.0.1:8000/api/playlists/${activePlaylistId}/items`, {
+                                              method: "POST",
+                                              headers: {"Content-Type": "application/json"},
+                                              body: JSON.stringify({
+                                                youtube_url: rec.track.youtube_url,
+                                                position_index: item.position_index + 1
+                                              })
+                                            })
+                                            .then(r => r.json())
+                                            .then(data => {
+                                              if(data.success && data.item_id) {
+                                                // Apply suggested transitions
+                                                fetch(`http://127.0.0.1:8000/api/playlist-items/${data.item_id}`, {
+                                                  method: "PUT",
+                                                  headers: {"Content-Type": "application/json"},
+                                                  body: JSON.stringify(rec.suggestion)
+                                                }).then(() => {
+                                                  setRecommendations([]);
+                                                  loadPlaylistItems(activePlaylistId as number);
+                                                  setSelectedItemId(data.item_id);
+                                                });
+                                              }
+                                            });
+                                          }}
+                                          className="w-full py-1.5 bg-neon-cyan/20 hover:bg-neon-cyan/30 text-neon-cyan rounded font-bold font-mono text-[9px] transition-colors flex items-center justify-center"
+                                        >
+                                          LOAD SUGGESTION
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })() : (

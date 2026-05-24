@@ -11,6 +11,7 @@ from extractor import resolve_youtube_audio
 from analyzer import analyze_audio
 from database import init_db, get_track_metadata, save_track_metadata, get_all_tracks, create_playlist, get_playlists, add_item_to_playlist, update_playlist_item, delete_playlist_item, get_playlist_items, create_export_job, get_export_job, get_all_exports
 from exporter import process_export_job, apply_custom_crossfade, apply_time_stretch
+from recommender import score_candidates
 from pydub import AudioSegment
 import re
 
@@ -238,6 +239,21 @@ def api_create_playlist(req: PlaylistCreate):
 def api_get_playlists():
     try:
         return {"success": True, "playlists": get_playlists()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/recommendations")
+def api_get_recommendations(base_youtube_url: str):
+    try:
+        base_track = get_track_metadata(base_youtube_url)
+        if not base_track:
+            raise HTTPException(status_code=404, detail="Base track not found")
+        
+        all_tracks = get_all_tracks()
+        candidates = score_candidates(base_track, all_tracks)
+        
+        # Return top 5
+        return {"success": True, "recommendations": candidates[:5]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
