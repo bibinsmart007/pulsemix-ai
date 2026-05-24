@@ -231,7 +231,14 @@ export default function VisualTimeline({ items, onUpdateItem, selectedItemId, on
                     <div className="absolute -top-5 left-1 text-[8px] text-neon-cyan font-mono whitespace-nowrap bg-black/60 px-1 rounded flex gap-1">
                       <span>OVERLAP {block.xfade}ms</span>
                       {block.fade_curve === 'equal_power' && <span className="text-neon-pink">(EQ PWR)</span>}
-                      {block.eq_mode && block.eq_mode !== 'none' && <span className="text-neon-purple uppercase">[{block.eq_mode}]</span>}
+                      {block.eq_mode && block.eq_mode !== 'none' && (
+                        <span className="text-neon-purple uppercase">
+                          [{block.eq_mode}]
+                          {['vocal_hold', 'drum_swap', 'instrumental_bed'].includes(block.eq_mode) && block.stem_status !== 'READY' && (
+                            <span className="text-amber-400 font-bold ml-1">(WAITING ON STEMS)</span>
+                          )}
+                        </span>
+                      )}
                       {block.sync_mode === 'auto' && block.bpm && outgoingBpm && (
                         <span className="text-emerald-500 uppercase">
                           [SYNC: {Math.round(block.bpm)} → {Math.round(outgoingBpm)}]

@@ -89,8 +89,12 @@ export function useTimelinePlayback(audioEngine: any, positionedBlocks: any[]) {
           }
           audioEngine.setCrossfader(cfValue);
 
-          // EQ Automation (Bass Swap)
-          if (incomingBlock.eq_mode === "bass_swap") {
+          // EQ & Stem Automation
+          const actualEqMode = (['vocal_hold', 'drum_swap', 'instrumental_bed'].includes(incomingBlock.eq_mode) && incomingBlock.stem_status !== 'READY') 
+              ? 'smooth_blend' 
+              : incomingBlock.eq_mode;
+
+          if (actualEqMode === "bass_swap") {
              if (progress > 0.5) {
                 audioEngine.updateEQ(targetDeckIsA ? "B" : "A", "low", -12); // outgoing cuts bass
                 audioEngine.updateEQ(targetDeckIsA ? "A" : "B", "low", 0);   // incoming brings bass in
@@ -98,12 +102,36 @@ export function useTimelinePlayback(audioEngine: any, positionedBlocks: any[]) {
                 audioEngine.updateEQ(targetDeckIsA ? "B" : "A", "low", 0);
                 audioEngine.updateEQ(targetDeckIsA ? "A" : "B", "low", -12);
              }
+          } else if (actualEqMode === "drum_swap") {
+             if (progress > 0.5) {
+                audioEngine.updateStemVolume(targetDeckIsA ? "B" : "A", "drums", 0.0);
+                audioEngine.updateStemVolume(targetDeckIsA ? "A" : "B", "drums", 1.0);
+             } else {
+                audioEngine.updateStemVolume(targetDeckIsA ? "B" : "A", "drums", 1.0);
+                audioEngine.updateStemVolume(targetDeckIsA ? "A" : "B", "drums", 0.0);
+             }
+          } else if (actualEqMode === "vocal_hold") {
+             audioEngine.updateStemVolume(targetDeckIsA ? "B" : "A", "vocals", 1.0);
+             audioEngine.updateStemVolume(targetDeckIsA ? "A" : "B", "vocals", 0.0);
+          } else if (actualEqMode === "instrumental_bed") {
+             audioEngine.updateStemVolume(targetDeckIsA ? "A" : "B", "vocals", 1.0);
+             audioEngine.updateStemVolume(targetDeckIsA ? "A" : "B", "drums", 0.0);
+             audioEngine.updateStemVolume(targetDeckIsA ? "A" : "B", "melody", 0.0);
+             audioEngine.updateStemVolume(targetDeckIsA ? "B" : "A", "vocals", 0.0);
+             audioEngine.updateStemVolume(targetDeckIsA ? "B" : "A", "drums", 1.0);
+             audioEngine.updateStemVolume(targetDeckIsA ? "B" : "A", "melody", 1.0);
           }
           
         } else if (activeBlockA) {
           audioEngine.setCrossfader(-100);
+          audioEngine.updateStemVolume("A", "vocals", 1.0);
+          audioEngine.updateStemVolume("A", "drums", 1.0);
+          audioEngine.updateStemVolume("A", "melody", 1.0);
         } else if (activeBlockB) {
           audioEngine.setCrossfader(100);
+          audioEngine.updateStemVolume("B", "vocals", 1.0);
+          audioEngine.updateStemVolume("B", "drums", 1.0);
+          audioEngine.updateStemVolume("B", "melody", 1.0);
         }
 
         return nextTime;

@@ -37,6 +37,11 @@ import { useTimelinePlayback } from "@/hooks/useTimelinePlayback";
 import { computeTimelineBlocks } from "@/utils/timeline";
 import { getCompatibleKeys } from "@/utils/audio";
 
+import CloudLibrary, { CloudProject } from "@/components/CloudLibrary";
+import SharedProjectViewer from "@/components/SharedProjectViewer";
+import ReviewPanel, { ProjectComment } from "@/components/ReviewPanel";
+import PublishModal, { PublishConfig } from "@/components/PublishModal";
+import AccessManager, { PublishLink } from "@/components/AccessManager";
 
 export default function Home() {
   const engine = useAudioEngine();
@@ -61,6 +66,35 @@ export default function Home() {
   // Playlist State
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
+  
+  // Phase 20: Publishing
+  const [showPublishModal, setShowPublishModal] = useState<boolean>(false);
+  const [publishTargetVersion, setPublishTargetVersion] = useState<number | null>(null);
+  const [publishPackageType, setPublishPackageType] = useState<string>("private_preview");
+  const [publishNotes, setPublishNotes] = useState<string>("");
+  const [publicPublishData, setPublicPublishData] = useState<any | null>(null);
+
+  // Phase 21: Access Control
+  const [publishAllowDownload, setPublishAllowDownload] = useState<boolean>(false);
+  const [publishExpiresHours, setPublishExpiresHours] = useState<number | null>(null);
+  const [publishPassword, setPublishPassword] = useState<string>("");
+  const [publishRecipientLabel, setPublishRecipientLabel] = useState<string>("");
+  const [activePublishLinks, setActivePublishLinks] = useState<any[]>([]);
+  const [showLinksModal, setShowLinksModal] = useState<boolean>(false);
+  const [publicAuthPassword, setPublicAuthPassword] = useState<string>("");
+  const [publicNeedsPassword, setPublicNeedsPassword] = useState<boolean>(false);
+  const [publicPublishError, setPublicPublishError] = useState<string | null>(null);
+
+  // Phase 22: Component States
+  const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
+  const [cloudProject, setCloudProject] = useState<CloudProject | null>(null);
+  
+  const [isReviewMode, setIsReviewMode] = useState<boolean>(false);
+  const [isReviewPanelOpen, setIsReviewPanelOpen] = useState<boolean>(false);
+  const [projectComments, setProjectComments] = useState<ProjectComment[]>([]);
+  const [currentVersionId, setCurrentVersionId] = useState<number | null>(null);
+  
+
   const [activePlaylistItems, setActivePlaylistItems] = useState<any[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(3);
 
@@ -148,7 +182,7 @@ export default function Home() {
   // Fetch playlists
   const handlePreviewTransition = async (itemId: number, playlistId: number) => {
     try {
-      setToast({ type: 'info', message: 'Rendering transition preview...', id: `preview-${itemId}` });
+      addToast('Rendering transition preview...', 'info');
       const res = await fetch(`http://127.0.0.1:8000/api/preview-transition/${itemId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,12 +192,97 @@ export default function Home() {
       if (data.success) {
         const audio = new Audio(`http://127.0.0.1:8000${data.url}`);
         audio.play();
-        setToast({ type: 'success', message: 'Playing transition preview...' });
+        addToast('Playing transition preview...', 'success');
       } else {
-        setToast({ type: 'error', message: data.detail || 'Preview failed' });
+        addToast(data.detail || 'Preview failed', 'error');
       }
     } catch (e: any) {
-      setToast({ type: 'error', message: 'Preview failed: ' + e.message });
+      addToast('Preview failed: ' + e.message, 'error');
+    }
+  };
+
+  // Phase 20/21: Publishing Handlers
+  const handlePublishVersion = async () => {
+    if (!publishTargetVersion) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/cloud/versions/${publishTargetVersion}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          package_type: publishPackageType,
+          notes: publishNotes,
+          allow_download: publishAllowDownload,
+          expires_in_hours: publishExpiresHours,
+          password: publishPassword,
+          recipient_label: publishRecipientLabel
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast("Version published!", "success");
+        setShowPublishModal(false);
+        setPublishNotes("");
+        setPublishPackageType("private_preview");
+        setPublishPassword("");
+        setPublishAllowDownload(false);
+        setPublishExpiresHours(null);
+        setPublishRecipientLabel("");
+        
+        // Simulate opening the public link
+        handleOpenPublicLink(data.publish_token);
+      }
+    } catch (e) {
+      addToast("Failed to publish", "error");
+    }
+  };
+
+  const handleOpenPublicLink = async (token: string, password?: string) => {
+    try {
+      let url = `http://127.0.0.1:8000/api/public/publish/${token}`;
+      if (password) url += `?pwd=${encodeURIComponent(password)}`;
+      
+      const res = await fetch(url);
+      const data = await res.json();
+      
+      if (data.success) {
+        setPublicPublishData({...data.package, publish_token: token});
+        setPublicNeedsPassword(false);
+        setPublicPublishError(null);
+      } else if (data.needs_password) {
+        setPublicNeedsPassword(true);
+        setPublicPublishData({ publish_token: token }); // store token to retry
+      } else if (data.error) {
+        setPublicPublishError(data.error);
+        setPublicPublishData({ publish_token: token });
+      }
+    } catch (e) {
+      addToast("Failed to load public link", "error");
+    }
+  };
+
+  const handleFetchActiveLinks = async (versionId: number) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/cloud/versions/${versionId}/links`);
+      const data = await res.json();
+      if (data.success) {
+        setActivePublishLinks(data.links);
+        setShowLinksModal(true);
+      }
+    } catch (e) {
+      addToast("Failed to load links", "error");
+    }
+  };
+
+  const handleRevokeLink = async (token: string, versionId: number) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/cloud/publish/${token}/revoke`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        addToast("Link revoked", "success");
+        handleFetchActiveLinks(versionId); // refresh
+      }
+    } catch (e) {
+      addToast("Failed to revoke link", "error");
     }
   };
 
@@ -590,6 +709,44 @@ export default function Home() {
         ))}
       </div>
       
+      {/* Component Modals */}
+      <CloudLibrary 
+        isOpen={showCloudModal}
+        onClose={() => setShowCloudModal(false)}
+        activePlaylistId={activePlaylistId}
+        cloudProject={cloudProject}
+        onSaveCloudVersion={() => {}}
+        onLoadSharedProject={(token) => {}}
+        onViewPublishLinks={(versionId) => {}}
+        onPublishVersion={(versionId) => {}}
+      />
+      <PublishModal 
+        isOpen={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        onPublish={(config) => {}}
+      />
+      <AccessManager 
+        isOpen={showLinksModal}
+        onClose={() => setShowLinksModal(false)}
+        activeLinks={activePublishLinks}
+        onRevoke={async (token) => {}}
+      />
+      <ReviewPanel 
+        isOpen={isReviewPanelOpen}
+        onClose={() => setIsReviewPanelOpen(false)}
+        comments={projectComments}
+        onAddComment={async () => {}}
+        onResolveComment={async () => {}}
+        currentVersionId={currentVersionId}
+      />
+      <SharedProjectViewer 
+        isReviewMode={isReviewMode}
+        sharedProject={cloudProject}
+        onExitReviewMode={() => setIsReviewMode(false)}
+        onToggleReviewPanel={() => setIsReviewPanelOpen(!isReviewPanelOpen)}
+        isReviewPanelOpen={isReviewPanelOpen}
+      />
+
       {/* Top Navigation & Workspace Header */}
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md z-20 flex-shrink-0">
         {/* Brand */}

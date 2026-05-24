@@ -145,6 +145,75 @@ def score_candidates(base_track: Dict[str, Any], library: List[Dict[str, Any]]) 
             "suggestion": suggestion
         })
         
-    # Sort by score descending
     candidates.sort(key=lambda x: x["score"], reverse=True)
     return candidates
+
+def build_set_plan(base_track: Dict[str, Any], library: List[Dict[str, Any]], steps: int = 3) -> Dict[str, Any]:
+    plan_steps = []
+    current_track = base_track
+    used_urls = {base_track.get("youtube_url")}
+    
+    total_score = 0
+    overall_reasons = []
+    
+    bpm_trajectory = []
+    if base_track.get("bpm"):
+        bpm_trajectory.append(base_track["bpm"])
+        
+    for i in range(steps):
+        # Score candidates against current track
+        candidates = score_candidates(current_track, library)
+        
+        # Filter out already used tracks
+        valid_candidates = [c for c in candidates if c["track"].get("youtube_url") not in used_urls]
+        
+        if not valid_candidates:
+            break
+            
+        # Pick the top candidate
+        best = valid_candidates[0]
+        
+        plan_steps.append(best)
+        used_urls.add(best["track"].get("youtube_url"))
+        current_track = best["track"]
+        
+        total_score += best["score"]
+        if best["track"].get("bpm"):
+            bpm_trajectory.append(best["track"]["bpm"])
+            
+    # Set-level analysis
+    avg_score = total_score / len(plan_steps) if plan_steps else 0
+    
+    # Analyze trajectory
+    is_stable = True
+    is_rising = False
+    
+    if len(bpm_trajectory) >= 2:
+        start_bpm = bpm_trajectory[0]
+        end_bpm = bpm_trajectory[-1]
+        drift = end_bpm - start_bpm
+        
+        if drift > 4.0:
+            is_rising = True
+            is_stable = False
+            overall_reasons.append("Gradual Energy Rise (BPM Lift)")
+        elif drift < -4.0:
+            is_stable = False
+            overall_reasons.append("Cool Down (BPM Drop)")
+        else:
+            overall_reasons.append("Stable Energy Flow")
+            
+    if avg_score > 85:
+        overall_reasons.append("Highly Cohesive Harmonic Path")
+    elif avg_score > 60:
+        overall_reasons.append("Safe & Compatible Sequence")
+    else:
+        overall_reasons.append("⚠️ Challenging Transitions Detected")
+        
+    return {
+        "success": True,
+        "steps": plan_steps,
+        "overall_score": round(avg_score, 1),
+        "overall_reasons": overall_reasons,
+        "trajectory": "rising" if is_rising else "stable"
+    }

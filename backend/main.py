@@ -1,17 +1,24 @@
 import os
 import sys
+import json
+import sqlite3
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 
 # Add current dir to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from extractor import resolve_youtube_audio
 from analyzer import analyze_audio
-from database import init_db, get_track_metadata, save_track_metadata, get_all_tracks, create_playlist, get_playlists, add_item_to_playlist, update_playlist_item, delete_playlist_item, get_playlist_items, create_export_job, get_export_job, get_all_exports
+from database import init_db, get_db_connection, get_track_metadata, save_track_metadata, get_all_tracks, create_playlist, get_playlists, add_item_to_playlist, update_playlist_item, delete_playlist_item, get_playlist_items, create_export_job, get_export_job, get_all_exports, log_activity_event, get_activity_events
+from backend.stem_extractor import run_stem_extraction
+import uuid
+import time
+import threading
 from exporter import process_export_job, apply_custom_crossfade, apply_time_stretch
-from recommender import score_candidates
+from recommender import score_candidates, build_set_plan
 from pydub import AudioSegment
 import re
 
@@ -204,6 +211,19 @@ def import_track(req: ImportRequest, bg_tasks: BackgroundTasks):
         "status": "queued"
     }
 
+class StemExtractRequest(BaseModel):
+    youtube_url: str
+
+@app.post("/api/stems/extract")
+def extract_stems(req: StemExtractRequest, bg_tasks: BackgroundTasks):
+    if not req.youtube_url:
+        raise HTTPException(status_code=400, detail="YouTube URL required")
+    
+    # We trigger the async extraction in background tasks so the request returns immediately
+    bg_tasks.add_task(run_stem_extraction, req.youtube_url)
+    
+    return {"success": True, "status": "queued", "youtube_url": req.youtube_url}
+
 @app.get("/api/library")
 def get_library():
     """Endpoint to retrieve historically analyzed tracks from SQLite."""
@@ -226,6 +246,44 @@ class PlaylistItemUpdate(BaseModel):
     trim_end_ms: Optional[float] = None
     crossfade_duration_ms: Optional[float] = None
     gain_db: Optional[float] = None
+    eq_mode: Optional[str] = None
+
+class TakeEvent(BaseModel):
+    timestamp_ms: float
+    event_type: str
+    item_id: Optional[int] = None
+    previous_val: Optional[str] = None
+    new_val: Optional[str] = None
+    is_divergence: bool = False
+
+class TakeCreate(BaseModel):
+    events: List[TakeEvent]
+
+# In-memory store for performance takes
+takes_db: Dict[int, List[Dict[str, Any]]] = {}
+
+@app.post("/api/playlists/{playlist_id}/takes")
+def api_create_take(playlist_id: int, req: TakeCreate):
+    try:
+        take_id = str(uuid.uuid4())
+        take_data = {
+            "take_id": take_id,
+            "created_at": time.time(),
+            "events": [e.dict() for e in req.events]
+        }
+        if playlist_id not in takes_db:
+            takes_db[playlist_id] = []
+        takes_db[playlist_id].append(take_data)
+        return {"success": True, "take_id": take_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/playlists/{playlist_id}/takes")
+def api_get_takes(playlist_id: int):
+    try:
+        return {"success": True, "takes": takes_db.get(playlist_id, [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/playlists")
 def api_create_playlist(req: PlaylistCreate):
@@ -265,10 +323,499 @@ def api_add_item_to_playlist(playlist_id: int, req: PlaylistItemAdd):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class AutoBuildRequest(BaseModel):
+    steps: int = 3
+
+@app.post("/api/playlists/{playlist_id}/autobuild")
+def api_autobuild_set(playlist_id: int, req: AutoBuildRequest):
+    try:
+        items = get_playlist_items(playlist_id)
+        if not items:
+            raise HTTPException(status_code=400, detail="Playlist is empty, cannot autobuild without a seed track.")
+            
+        last_item = items[-1]
+        base_track = get_track_metadata(last_item["youtube_url"])
+        if not base_track:
+            raise HTTPException(status_code=404, detail="Seed track metadata not found.")
+            
+        library = get_all_tracks()
+        plan = build_set_plan(base_track, library, steps=req.steps)
+        
+        return plan
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/playlists/{playlist_id}/items")
 def api_get_playlist_items(playlist_id: int):
     try:
         return {"success": True, "items": get_playlist_items(playlist_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ProjectImportRequest(BaseModel):
+    project_data: Dict[str, Any]
+
+@app.get("/api/projects/export/{playlist_id}")
+def api_export_project(playlist_id: int):
+    try:
+        # Fetch playlist name
+        conn = get_db_connection()
+        playlist = conn.execute("SELECT name FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
+        conn.close()
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+            
+        items = get_playlist_items(playlist_id)
+        takes = takes_db.get(playlist_id, [])
+        
+        manifest = {
+            "schema_version": "1.0",
+            "created_with_phase": "Phase 17",
+            "playlist_name": playlist["name"],
+            "track_count": len(items),
+            "take_count": len(takes),
+            "audio_assets_included": False,
+            "stems_included": False,
+            "required_actions": [
+                "Ensure local or cloud access to original audio tracks via YouTube URL.",
+                "Stems will need to be regenerated locally if 'STEM AUTOMATION' modes are used."
+            ],
+            "items": items,
+            "takes": takes
+        }
+        
+        return {"success": True, "project": manifest}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/projects/import")
+def api_import_project(req: ProjectImportRequest):
+    try:
+        data = req.project_data
+        if data.get("schema_version") != "1.0":
+            # Just a warning or info, we can attempt to parse anyway
+            pass
+            
+        # 1. Create new playlist
+        new_name = f"{data.get('playlist_name', 'Imported Session')} (Imported)"
+        new_pid = create_playlist(new_name)
+        
+        # 2. Add items
+        items = data.get("items", [])
+        for item in items:
+            item_id = add_item_to_playlist(new_pid, item["youtube_url"], item["position_index"])
+            # Update DSP metadata
+            updates = {
+                "trim_start_ms": item.get("trim_start_ms"),
+                "trim_end_ms": item.get("trim_end_ms"),
+                "crossfade_duration_ms": item.get("crossfade_duration_ms"),
+                "gain_db": item.get("gain_db"),
+                "eq_mode": item.get("eq_mode")
+            }
+            # Remove Nones
+            updates = {k: v for k, v in updates.items() if v is not None}
+            if updates:
+                update_playlist_item(item_id, updates)
+                
+        # 3. Add takes
+        takes = data.get("takes", [])
+        if takes:
+            takes_db[new_pid] = takes
+            
+        return {"success": True, "new_playlist_id": new_pid}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class CloudProjectCreate(BaseModel):
+    playlist_id: int
+    project_data: Dict[str, Any]
+
+class CloudVersionCreate(BaseModel):
+    project_data: Dict[str, Any]
+
+@app.get("/api/cloud/projects")
+def api_get_cloud_projects():
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        projects = conn.execute("SELECT * FROM cloud_projects ORDER BY created_at DESC").fetchall()
+        
+        result = []
+        for p in projects:
+            versions = conn.execute("SELECT COUNT(*) as count FROM cloud_project_versions WHERE project_id = ?", (p["id"],)).fetchone()
+            last_edit = conn.execute("SELECT created_at, review_status FROM cloud_project_versions WHERE project_id = ? ORDER BY version_number DESC LIMIT 1", (p["id"],)).fetchone()
+            result.append({
+                "id": p["id"],
+                "name": p["name"],
+                "share_token": p["share_token"],
+                "created_at": p["created_at"],
+                "version_count": versions["count"],
+                "last_edited": last_edit["created_at"] if last_edit else p["created_at"],
+                "review_status": last_edit["review_status"] if last_edit else "needs_review"
+            })
+        conn.close()
+        return {"success": True, "projects": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/cloud/projects")
+def api_create_cloud_project(req: CloudProjectCreate):
+    try:
+        data = req.project_data
+        share_token = str(uuid.uuid4())
+        name = data.get("playlist_name", "Untitled Project")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = time.time()
+        
+        cursor.execute("INSERT INTO cloud_projects (name, share_token, created_at) VALUES (?, ?, ?)", (name, share_token, now))
+        project_id = cursor.lastrowid
+        
+        # Insert v1
+        cursor.execute("INSERT INTO cloud_project_versions (project_id, version_number, payload_json, created_at) VALUES (?, ?, ?, ?)", 
+                       (project_id, 1, json.dumps(data), now))
+        conn.commit()
+        conn.close()
+        return {"success": True, "project_id": project_id, "share_token": share_token}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/cloud/projects/{project_id}/versions")
+def api_save_cloud_version(project_id: int, req: CloudVersionCreate):
+    try:
+        data = req.project_data
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        now = time.time()
+        
+        # Get latest version number and id before insert
+        latest = cursor.execute("SELECT id, version_number as max_v FROM cloud_project_versions WHERE project_id = ? ORDER BY version_number DESC LIMIT 1", (project_id,)).fetchone()
+        next_v = (latest["max_v"] if latest else 0) + 1
+        
+        cursor.execute("INSERT INTO cloud_project_versions (project_id, version_number, payload_json, created_at) VALUES (?, ?, ?, ?)", 
+                       (project_id, next_v, json.dumps(data), now))
+        new_version_id = cursor.lastrowid
+        
+        # Phase 19: Carry forward unresolved comments from previous version
+        if latest:
+            old_v_id = latest["id"]
+            unresolved = cursor.execute("SELECT * FROM project_comments WHERE version_id = ? AND is_resolved = 0", (old_v_id,)).fetchall()
+            for c in unresolved:
+                cursor.execute("""
+                    INSERT INTO project_comments (version_id, target_type, target_id, timestamp_ms, boundary_index, content, is_resolved, carried_forward_from, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+                """, (new_version_id, c["target_type"], c["target_id"], c["timestamp_ms"], c["boundary_index"], c["content"], c["id"], now))
+        
+        # Update project name just in case
+        name = data.get("playlist_name", "Untitled Project")
+        cursor.execute("UPDATE cloud_projects SET name = ? WHERE id = ?", (name, project_id))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True, "version_number": next_v, "version_id": new_version_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Phase 19: Commenting and Review Endpoints
+
+class CommentCreate(BaseModel):
+    target_type: str
+    target_id: Optional[str] = None
+    timestamp_ms: Optional[float] = None
+    boundary_index: Optional[int] = None
+    content: str
+
+class StatusUpdate(BaseModel):
+    status: str
+
+@app.get("/api/cloud/versions/{version_id}/comments")
+def api_get_comments(version_id: int):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM project_comments WHERE version_id = ? ORDER BY created_at ASC", (version_id,)).fetchall()
+        conn.close()
+        return {"success": True, "comments": [dict(r) for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/cloud/versions/{version_id}/comments")
+def api_post_comment(version_id: int, req: CommentCreate):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = time.time()
+        cursor.execute("""
+            INSERT INTO project_comments (version_id, target_type, target_id, timestamp_ms, boundary_index, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (version_id, req.target_type, req.target_id, req.timestamp_ms, req.boundary_index, req.content, now))
+        comment_id = cursor.lastrowid
+        
+        # Get project_id
+        res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
+        project_id = res[0] if res else 0
+        
+        conn.commit()
+        conn.close()
+        
+        if project_id:
+            log_activity_event(
+                project_id=project_id,
+                version_id=version_id,
+                event_type="comment_added",
+                actor="Collaborator",
+                target_id=comment_id,
+                metadata={"content": req.content, "target_type": req.target_type},
+                importance="high"
+            )
+            
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/cloud/comments/{comment_id}/resolve")
+def api_resolve_comment(comment_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Toggle resolved status
+        curr = cursor.execute("SELECT is_resolved FROM project_comments WHERE id = ?", (comment_id,)).fetchone()
+        if not curr:
+            raise Exception("Comment not found")
+        new_val = 0 if curr[0] == 1 else 1
+        cursor.execute("UPDATE project_comments SET is_resolved = ? WHERE id = ?", (new_val, comment_id))
+        
+        # Get project info for activity log
+        res = cursor.execute("SELECT version_id FROM project_comments WHERE id = ?", (comment_id,)).fetchone()
+        version_id = res[0] if res else 0
+        project_id = 0
+        if version_id:
+            pres = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
+            if pres:
+                project_id = pres[0]
+                
+        conn.close()
+        
+        if project_id:
+            event_type = "comment_resolved" if new_val == 1 else "comment_reopened"
+            log_activity_event(
+                project_id=project_id,
+                version_id=version_id,
+                event_type=event_type,
+                actor="Collaborator",
+                target_id=comment_id,
+                importance="normal"
+            )
+            
+        return {"success": True, "is_resolved": bool(new_val)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TaskCreate(BaseModel):
+    title: str
+    comment_id: Optional[int] = None
+    assignee_type: Optional[str] = None
+    assignee_id: Optional[int] = None
+    assignee_label: Optional[str] = None
+    status: str = 'open'
+    priority: str = 'normal'
+    due_at: Optional[float] = None
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    assignee_type: Optional[str] = None
+    assignee_id: Optional[int] = None
+    assignee_label: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    due_at: Optional[float] = None
+
+@app.get("/api/cloud/projects/{project_id}/tasks")
+def api_get_tasks(project_id: int):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM review_tasks WHERE project_id = ? ORDER BY created_at DESC", (project_id,)).fetchall()
+        conn.close()
+        return {"success": True, "tasks": [dict(r) for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cloud/versions/{version_id}/tasks")
+def api_get_version_tasks(version_id: int):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM review_tasks WHERE version_id = ? ORDER BY created_at DESC", (version_id,)).fetchall()
+        conn.close()
+        return {"success": True, "tasks": [dict(r) for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/cloud/versions/{version_id}/tasks")
+def api_post_task(version_id: int, req: TaskCreate):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = time.time()
+        
+        # Get project_id
+        res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
+        if not res:
+            raise Exception("Version not found")
+        project_id = res[0]
+        
+        cursor.execute("""
+            INSERT INTO review_tasks (comment_id, project_id, version_id, title, assignee_type, assignee_id, assignee_label, status, priority, due_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (req.comment_id, project_id, version_id, req.title, req.assignee_type, req.assignee_id, req.assignee_label, req.status, req.priority, req.due_at, now, now))
+        
+        task_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        log_activity_event(
+            project_id=project_id,
+            version_id=version_id,
+            event_type="task_created",
+            actor="Collaborator",
+            target_id=task_id,
+            metadata={"title": req.title, "assignee_label": req.assignee_label},
+            importance="normal"
+        )
+            
+        return {"success": True, "task_id": task_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/cloud/tasks/{task_id}")
+def api_update_task(task_id: int, req: TaskUpdate):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        task = cursor.execute("SELECT * FROM review_tasks WHERE id = ?", (task_id,)).fetchone()
+        if not task:
+            raise Exception("Task not found")
+            
+        updates = []
+        params = []
+        if req.title is not None:
+            updates.append("title = ?")
+            params.append(req.title)
+        if req.assignee_type is not None:
+            updates.append("assignee_type = ?")
+            params.append(req.assignee_type)
+        if req.assignee_id is not None:
+            updates.append("assignee_id = ?")
+            params.append(req.assignee_id)
+        if req.assignee_label is not None:
+            updates.append("assignee_label = ?")
+            params.append(req.assignee_label)
+        if req.status is not None:
+            updates.append("status = ?")
+            params.append(req.status)
+            if req.status == 'done' and task['status'] != 'done':
+                updates.append("completed_at = ?")
+                params.append(time.time())
+            elif req.status != 'done' and task['status'] == 'done':
+                updates.append("completed_at = NULL")
+        if req.priority is not None:
+            updates.append("priority = ?")
+            params.append(req.priority)
+        if req.due_at is not None:
+            updates.append("due_at = ?")
+            params.append(req.due_at)
+            
+        if not updates:
+            return {"success": True}
+            
+        updates.append("updated_at = ?")
+        params.append(time.time())
+        params.append(task_id)
+        
+        cursor.execute(f"UPDATE review_tasks SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+        conn.close()
+        
+        event_type = "task_updated"
+        if req.status == 'done' and task['status'] != 'done':
+            event_type = "task_completed"
+            
+        log_activity_event(
+            project_id=task['project_id'],
+            version_id=task['version_id'],
+            event_type=event_type,
+            actor="Collaborator",
+            target_id=task_id,
+            metadata={"status": req.status, "assignee_label": req.assignee_label},
+            importance="normal"
+        )
+            
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/cloud/versions/{version_id}/status")
+def api_update_version_status(version_id: int, req: StatusUpdate):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE cloud_project_versions SET review_status = ? WHERE id = ?", (req.status, version_id))
+        
+        res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
+        project_id = res[0] if res else 0
+        
+        conn.commit()
+        conn.close()
+        
+        if project_id:
+            log_activity_event(
+                project_id=project_id,
+                version_id=version_id,
+                event_type="status_changed",
+                actor="Collaborator",
+                metadata={"new_status": req.status},
+                importance="high"
+            )
+            
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cloud/share/{share_token}")
+def api_get_shared_project(share_token: str):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        project = conn.execute("SELECT * FROM cloud_projects WHERE share_token = ?", (share_token,)).fetchone()
+        
+        if not project:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Shared project not found")
+            
+        latest_version = conn.execute("SELECT * FROM cloud_project_versions WHERE project_id = ? ORDER BY version_number DESC LIMIT 1", (project["id"],)).fetchone()
+        conn.close()
+        
+        if not latest_version:
+            raise HTTPException(status_code=404, detail="Project data missing")
+            
+        data = json.loads(latest_version["payload_json"])
+        return {
+            "success": True, 
+            "project_metadata": {
+                "id": project["id"],
+                "name": project["name"],
+                "version": latest_version["version_number"],
+                "version_id": latest_version["id"],
+                "last_edited": latest_version["created_at"],
+                "review_status": latest_version["review_status"]
+            },
+            "manifest": data
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -299,12 +846,15 @@ def get_job_status(job_id: str):
 
 class ExportRequest(BaseModel):
     playlist_id: int
+    master_bus_mode: Optional[str] = "Balanced"
 
 @app.post("/api/export")
 def create_export(req: ExportRequest, bg_tasks: BackgroundTasks):
-    job_id = str(uuid.uuid4())
-    create_export_job(job_id, req.playlist_id, '{"source": "playlist"}')
-    bg_tasks.add_task(process_export_job, job_id, req.playlist_id, "Playlist")
+    job_id = f"{uuid.uuid4()}"
+    settings = json.dumps({"source": "playlist", "master_bus_mode": req.master_bus_mode})
+    create_export_job(job_id, req.playlist_id, settings)
+    bg_tasks.add_task(process_export_job, job_id, req.playlist_id, "Playlist", req.master_bus_mode)
+    
     return {"success": True, "job_id": job_id}
 @app.get("/api/export")
 def get_all_export_jobs():
@@ -450,3 +1000,225 @@ def preview_transition(item_id: int, req: PreviewRequest):
     except Exception as e:
         print(f"[Preview Error] {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Phase 20/21: Publishing Endpoints
+import hashlib
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+class PublishCreate(BaseModel):
+    package_type: str
+    notes: Optional[str] = None
+    allow_download: bool = False
+    expires_in_hours: Optional[int] = None
+    recipient_label: Optional[str] = None
+    password: Optional[str] = None
+
+@app.post("/api/cloud/versions/{version_id}/publish")
+def api_publish_version(version_id: int, req: PublishCreate):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = time.time()
+        publish_token = str(uuid.uuid4())
+        
+        expires_at = now + (req.expires_in_hours * 3600) if req.expires_in_hours else None
+        pwd_hash = hash_password(req.password) if req.password else None
+        
+        cursor.execute("""
+            INSERT INTO published_packages (version_id, publish_token, package_type, notes, allow_download, expires_at, password_hash, recipient_label, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (version_id, publish_token, req.package_type, req.notes, 1 if req.allow_download else 0, expires_at, pwd_hash, req.recipient_label, now))
+        
+        package_id = cursor.lastrowid
+        
+        # Get project_id
+        res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
+        project_id = res[0] if res else 0
+        
+        conn.commit()
+        conn.close()
+        
+        if project_id:
+            log_activity_event(
+                project_id=project_id,
+                version_id=version_id,
+                event_type="package_published",
+                actor="Creator",
+                target_id=package_id,
+                metadata={"package_type": req.package_type, "recipient_label": req.recipient_label},
+                importance="high"
+            )
+            
+        return {"success": True, "publish_token": publish_token}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/public/publish/{publish_token}")
+def api_get_public_publish(publish_token: str, pwd: Optional[str] = None):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        
+        package = conn.execute("SELECT * FROM published_packages WHERE publish_token = ?", (publish_token,)).fetchone()
+        if not package:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Publish token not found")
+            
+        now = time.time()
+        if package["is_revoked"] == 1:
+            conn.close()
+            return {"success": False, "error": "revoked"}
+            
+        if package["expires_at"] and now > package["expires_at"]:
+            conn.close()
+            return {"success": False, "error": "expired"}
+            
+        if package["password_hash"]:
+            if not pwd or hash_password(pwd) != package["password_hash"]:
+                conn.close()
+                return {"success": False, "needs_password": True}
+                
+        version = conn.execute("SELECT * FROM cloud_project_versions WHERE id = ?", (package["version_id"],)).fetchone()
+        if version is None:
+            print("VERSION IS NONE! package['version_id']=", package["version_id"])
+        project = conn.execute("SELECT * FROM cloud_projects WHERE id = ?", (version["project_id"],)).fetchone()
+        if project is None:
+            print("PROJECT IS NONE! version['project_id']=", version["project_id"])
+        
+        # Log the access
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO published_package_access_logs (package_id, event_type, timestamp)
+            VALUES (?, ?, ?)
+        """, (package["id"], "opened", now))
+        conn.commit()
+        
+        conn.close()
+        
+        # Log to activity feed
+        if project and version:
+            log_activity_event(
+                project_id=project["id"],
+                version_id=version["id"],
+                event_type="package_opened",
+                actor=package["recipient_label"] or "Anonymous Recipient",
+                target_id=package["id"],
+                metadata={"package_type": package["package_type"]},
+                importance="high"
+            )
+        
+        # Load the raw manifest payload
+        raw_manifest = json.loads(version["payload_json"])
+        
+        # Strip out internal metadata
+        public_manifest = {
+            "title": project["name"],
+            "version": version["version_number"],
+            "track_count": len(raw_manifest.get("items", [])),
+            "duration_ms": sum([t.get("duration", 0) for t in raw_manifest.get("items", [])]),
+            "tracks": [
+                {
+                    "title": t.get("title"),
+                    "artist": t.get("artist", "Unknown"),
+                    "genre": t.get("genre"),
+                    "bpm": t.get("bpm")
+                }
+                for t in raw_manifest.get("items", [])
+            ],
+            "notes": package["notes"],
+            "package_type": package["package_type"],
+            "allow_download": bool(package["allow_download"]),
+            "published_at": package["created_at"],
+            "audio_url": f"/api/export/mock_audio_{publish_token}"
+        }
+        
+        return {"success": True, "package": public_manifest}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AuthRequest(BaseModel):
+    password: str
+
+@app.post("/api/public/publish/{publish_token}/auth")
+def api_auth_public_publish(publish_token: str, req: AuthRequest):
+    return api_get_public_publish(publish_token, pwd=req.password)
+
+@app.post("/api/public/publish/{publish_token}/log_event")
+def api_log_event(publish_token: str, event_type: str = "played"):
+    try:
+        conn = get_db_connection()
+        package = conn.execute("SELECT id FROM published_packages WHERE publish_token = ?", (publish_token,)).fetchone()
+        if package:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO published_package_access_logs (package_id, event_type, timestamp)
+                VALUES (?, ?, ?)
+            """, (package[0], event_type, time.time()))
+            conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False}
+
+@app.get("/api/cloud/versions/{version_id}/links")
+def api_get_version_links(version_id: int):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        links = conn.execute("SELECT * FROM published_packages WHERE version_id = ? ORDER BY created_at DESC", (version_id,)).fetchall()
+        
+        results = []
+        for ln in links:
+            logs = conn.execute("SELECT * FROM published_package_access_logs WHERE package_id = ? ORDER BY timestamp DESC", (ln["id"],)).fetchall()
+            ln_dict = dict(ln)
+            ln_dict["logs"] = [dict(lg) for lg in logs]
+            results.append(ln_dict)
+            
+        conn.close()
+        return {"success": True, "links": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/cloud/publish/{publish_token}/revoke")
+def api_revoke_publish(publish_token: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE published_packages SET is_revoked = 1 WHERE publish_token = ?", (publish_token,))
+        
+        # Find project id
+        package = cursor.execute("SELECT id, version_id, recipient_label FROM published_packages WHERE publish_token = ?", (publish_token,)).fetchone()
+        project_id = 0
+        if package:
+            res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (package[1],)).fetchone()
+            if res:
+                project_id = res[0]
+                
+        conn.commit()
+        conn.close()
+        
+        if project_id and package:
+            log_activity_event(
+                project_id=project_id,
+                version_id=package[1],
+                event_type="link_revoked",
+                actor="Creator",
+                target_id=package[0],
+                metadata={"recipient_label": package[2]},
+                importance="normal"
+            )
+            
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+@app.get("/api/cloud/projects/{project_id}/activity")
+def api_get_cloud_project_activity(project_id: int):
+    try:
+        events = get_activity_events(project_id)
+        return {"success": True, "events": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
