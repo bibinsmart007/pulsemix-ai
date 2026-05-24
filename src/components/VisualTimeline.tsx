@@ -6,6 +6,8 @@ interface VisualTimelineProps {
   onUpdateItem: (itemId: number, updates: any) => void;
   selectedItemId: number | null;
   onSelectItem: (itemId: number) => void;
+  positionedBlocks: any[];
+  globalTimeMs: number;
 }
 
 const Waveform = ({ dataStr, durationMs, trimStart, trimEnd }: { dataStr: string, durationMs: number, trimStart: number, trimEnd: number }) => {
@@ -39,7 +41,7 @@ const Waveform = ({ dataStr, durationMs, trimStart, trimEnd }: { dataStr: string
   );
 };
 
-export default function VisualTimeline({ items, onUpdateItem, selectedItemId, onSelectItem }: VisualTimelineProps) {
+export default function VisualTimeline({ items, onUpdateItem, selectedItemId, onSelectItem, positionedBlocks, globalTimeMs }: VisualTimelineProps) {
   const [snapToBeat, setSnapToBeat] = useState(false);
   const [msPerPixel, setMsPerPixel] = useState(50);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,24 +96,6 @@ export default function VisualTimeline({ items, onUpdateItem, selectedItemId, on
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [draggingBlock, snapToBeat, msPerPixel, onUpdateItem]);
-
-  const blocks = items.map((item, index) => {
-    const durationMs = (item.duration || 0) * 1000; 
-    const trimStart = item.trim_start_ms || 0;
-    const trimEnd = item.trim_end_ms || durationMs;
-    const actualDuration = trimEnd - trimStart;
-    const xfade = index > 0 ? (item.crossfade_duration_ms || 0) : 0;
-    
-    return { ...item, durationMs, actualDuration, xfade, trimStart, trimEnd };
-  });
-
-  let currentPos = 0;
-  const positionedBlocks = blocks.map((block, index) => {
-    if (index > 0) currentPos -= block.xfade;
-    const startPos = currentPos;
-    currentPos += block.actualDuration;
-    return { ...block, startPos };
-  });
 
   const totalWidth = positionedBlocks.length > 0 
     ? (positionedBlocks[positionedBlocks.length - 1].startPos + positionedBlocks[positionedBlocks.length - 1].actualDuration) / msPerPixel
@@ -181,6 +165,12 @@ export default function VisualTimeline({ items, onUpdateItem, selectedItemId, on
               backgroundImage: `linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
               backgroundSize: `${1000 / msPerPixel}px 100%`
             }}
+          />
+
+          {/* Phase 12: Global Playhead */}
+          <div 
+            className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-50 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.8)]"
+            style={{ left: `${globalTimeMs / msPerPixel}px` }}
           />
 
           {positionedBlocks.map((block, i) => {

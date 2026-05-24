@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { 
   Sliders, 
   Music, 
@@ -33,12 +33,14 @@ import MixerDesk from "@/components/MixerDesk";
 import Visualizer from "@/components/Visualizer";
 import VisualTimeline from "@/components/VisualTimeline";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
+import { useTimelinePlayback } from "@/hooks/useTimelinePlayback";
+import { computeTimelineBlocks } from "@/utils/timeline";
 import { getCompatibleKeys } from "@/utils/audio";
-
 
 
 export default function Home() {
   const engine = useAudioEngine();
+  
   const [youtubeUrl, setYoutubeUrl] = useState<string>("");
   const [importQueue, setImportQueue] = useState<any[]>([{
     id: "mock_import_job",
@@ -61,6 +63,10 @@ export default function Home() {
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [activePlaylistItems, setActivePlaylistItems] = useState<any[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(3);
+
+  const positionedBlocks = useMemo(() => computeTimelineBlocks(activePlaylistItems), [activePlaylistItems]);
+  const playback = useTimelinePlayback(engine, positionedBlocks);
+
   const [recommendations, setRecommendations] = useState<any[]>([{
     track: {
       title: "Electronic Sunset (128 BPM)",
@@ -81,6 +87,7 @@ export default function Home() {
   const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [trackToAdd, setTrackToAdd] = useState<any | null>(null);
+  const [showAuditionDropdown, setShowAuditionDropdown] = useState(false);
 
   // Export State
   const [exportJobId, setExportJobId] = useState<string | null>(null);
@@ -1550,7 +1557,38 @@ export default function Home() {
 
                     <div className="flex gap-4 items-start relative min-h-[400px]">
                       {/* Left Column: Visual Timeline */}
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 flex flex-col gap-4">
+                        {/* Phase 12: Global Transport Bar */}
+                        <div className="glass-panel rounded-2xl p-4 border border-white/5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => playback.isPlayingGlobal ? playback.pausePlayback() : playback.startPlayback()}
+                              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${playback.isPlayingGlobal ? 'bg-amber-500/20 text-amber-500' : 'bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30'}`}
+                            >
+                              {playback.isPlayingGlobal ? <span className="w-3 h-3 bg-current rounded-sm" /> : <Play className="w-4 h-4 ml-1" />}
+                            </button>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-neutral-500 font-mono font-bold tracking-widest">GLOBAL TRANSPORT</span>
+                              <span className="text-white font-mono text-sm font-bold">
+                                {Math.floor(playback.globalTimeMs / 60000)}:
+                                {Math.floor((playback.globalTimeMs % 60000) / 1000).toString().padStart(2, '0')}.
+                                {Math.floor((playback.globalTimeMs % 1000) / 10).toString().padStart(2, '0')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {playback.auditionMode !== "none" && (
+                              <div className={`px-2 py-1 rounded text-[9px] font-mono font-bold border ${playback.auditionMode === 'approx' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/20'}`}>
+                                AUDITION MODE: {playback.auditionMode === 'approx' ? 'Browser Approx' : 'Render-Exact'}
+                              </div>
+                            )}
+                            <div className="px-2 py-1 rounded bg-black/40 text-[9px] font-mono text-neutral-400 border border-white/5 flex items-center gap-1">
+                              <span>[CF: {Math.round(engine.crossfader)}%]</span>
+                              <span>[EQ: {playback.activeBoundaryItem ? 'AUTOMATED' : 'DEFAULT'}]</span>
+                            </div>
+                          </div>
+                        </div>
+
                         {activePlaylistItems.length > 0 ? (
                           <VisualTimeline 
                             items={activePlaylistItems} 
@@ -1563,6 +1601,8 @@ export default function Home() {
                                 body: JSON.stringify(updates) 
                               }).then(() => loadPlaylistItems(activePlaylistId as number));
                             }} 
+                            positionedBlocks={positionedBlocks}
+                            globalTimeMs={playback.globalTimeMs}
                           />
                         ) : (
                           <div className="glass-panel rounded-2xl p-12 border border-white/5 text-center flex flex-col items-center justify-center gap-4 min-h-[300px]">
@@ -1724,13 +1764,37 @@ export default function Home() {
                               </div>
 
                               <div className="pt-3 border-t border-white/5 flex gap-2 flex-col">
-                                <button 
-                                  onClick={() => handlePreviewTransition(item.item_id, activePlaylistId as number)}
-                                  disabled={item.position_index === 0}
-                                  className={`w-full py-2 bg-neon-cyan/10 hover:bg-neon-cyan/20 text-neon-cyan rounded-xl font-bold font-mono text-[10px] transition-colors flex items-center justify-center gap-2 ${item.position_index === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                  <Sparkles className="w-4 h-4" /> PREVIEW TRANSITION
-                                </button>
+                                <div className="relative w-full flex">
+                                  <button 
+                                    onClick={() => playback.liveAuditionBoundary(item.position_index)}
+                                    disabled={item.position_index === 0}
+                                    className={`flex-1 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-l-xl font-bold font-mono text-[10px] transition-colors flex items-center justify-center gap-2 ${item.position_index === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                    <Volume2 className="w-4 h-4" /> LIVE AUDITION (APPROX)
+                                  </button>
+                                  <button
+                                    onClick={() => setShowAuditionDropdown(!showAuditionDropdown)}
+                                    disabled={item.position_index === 0}
+                                    className={`px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-r-xl border-l border-emerald-500/20 flex items-center justify-center ${item.position_index === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                  </button>
+                                  
+                                  {showAuditionDropdown && item.position_index > 0 && (
+                                    <div className="absolute top-full mt-1 right-0 w-48 bg-black/90 border border-white/10 rounded-lg overflow-hidden shadow-2xl z-50">
+                                      <button
+                                        onClick={() => {
+                                          setShowAuditionDropdown(false);
+                                          handlePreviewTransition(item.item_id, activePlaylistId as number);
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-white/5 text-[10px] font-mono text-white flex items-center gap-2"
+                                      >
+                                        <Download className="w-3 h-3 text-neutral-400" />
+                                        OFFLINE RENDER (EXACT)
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                                 <button 
                                   onClick={() => {
                                     fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, { method: 'DELETE' }).then(() => {
