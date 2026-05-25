@@ -33,16 +33,17 @@ export interface ReviewTask {
 interface ReviewPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  comments: ProjectComment[];
-  onAddComment: (content: string, targetType: string, targetId?: string, timestampMs?: number) => Promise<void>;
-  onResolveComment: (commentId: number) => Promise<void>;
   currentVersionId: number | null;
+  activeSessions: any[];
+  onSetFocus: (target: string | null) => void;
 }
 
 export default function ReviewPanel({
   isOpen,
   onClose,
-  currentVersionId
+  currentVersionId,
+  activeSessions,
+  onSetFocus
 }: ReviewPanelProps) {
   const [newComment, setNewComment] = useState("");
   const [targetType, setTargetType] = useState("project");
@@ -146,8 +147,13 @@ export default function ReviewPanel({
         ) : (
           <>
             {activeComments.map(comment => (
-              <div key={comment.id} className="bg-black/30 border border-white/10 rounded-lg p-3 group relative">
-                <div className="flex items-start justify-between mb-2">
+              <div 
+                key={comment.id} 
+                className="p-4 border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer"
+                onMouseEnter={() => onSetFocus(`comment_${comment.id}`)}
+                onMouseLeave={() => onSetFocus(null)}
+              >
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-brand uppercase tracking-wider">{comment.target_type}</span>
                     <span className="text-[10px] text-white/40 flex items-center gap-1">
@@ -163,6 +169,19 @@ export default function ReviewPanel({
                   </button>
                 </div>
                 <p className="text-sm text-white/90">{comment.content}</p>
+                {/* Soft Lock presence indicator */}
+                {(() => {
+                  const viewingSessions = activeSessions.filter(s => s.focus_target === `comment_${comment.id}` || s.focus_target === `task_${localTasks.find(t => t.comment_id === comment.id)?.id}`);
+                  if (viewingSessions.length > 0) {
+                    return (
+                      <div className="mt-2 flex items-center gap-2 text-[10px] uppercase font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded w-fit">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        {viewingSessions.map(s => s.user_label).join(", ")} {viewingSessions.length === 1 ? "is" : "are"} viewing this
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 {/* Task UI */}
                 {(() => {
                   const task = localTasks.find(t => t.comment_id === comment.id);
@@ -215,7 +234,12 @@ export default function ReviewPanel({
                 <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Resolved</h3>
                 <div className="flex flex-col gap-2">
                   {resolvedComments.map(comment => (
-                    <div key={comment.id} className="opacity-50 hover:opacity-100 transition-opacity bg-black/20 border border-white/5 rounded-lg p-3">
+                    <div 
+                      key={comment.id} 
+                      className="opacity-50 hover:opacity-100 transition-opacity bg-black/20 border border-white/5 rounded-lg p-3 cursor-pointer"
+                      onMouseEnter={() => onSetFocus(`comment_${comment.id}`)}
+                      onMouseLeave={() => onSetFocus(null)}
+                    >
                       <div className="flex items-start justify-between mb-1">
                         <span className="text-xs font-bold text-white/40 uppercase tracking-wider">{comment.target_type}</span>
                         <span className="text-[10px] text-emerald-500 flex items-center gap-1">

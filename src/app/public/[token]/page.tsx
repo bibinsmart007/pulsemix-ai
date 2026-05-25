@@ -186,11 +186,56 @@ export default function PublicPlaybackView() {
             </div>
           </div>
 
+          {/* Exports / Downloads */}
+          {packageData.exports && packageData.exports.length > 0 && (
+            <div className="flex flex-col gap-4 mt-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Download className="w-5 h-5 text-brand" /> Deliverables
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {packageData.exports.map((exp: any) => {
+                  const isArchived = exp.status_artifact === 'archived';
+                  const isPurged = exp.status_artifact === 'purged';
+                  const isExpired = exp.expires_at && (exp.expires_at < (Date.now() / 1000));
+                  const isUnavailable = isArchived || isPurged || isExpired;
+                  
+                  return (
+                    <div key={exp.id} className={`bg-surface border ${isUnavailable ? 'border-red-500/20' : 'border-white/5 hover:border-brand/50'} rounded-xl p-5 flex items-center justify-between transition-colors group`}>
+                      <div>
+                        <h4 className={`font-bold transition-colors ${isUnavailable ? 'text-white/40' : 'text-white group-hover:text-brand'}`}>
+                          {exp.artifact_label}
+                        </h4>
+                        <p className="text-xs text-white/50 font-mono mt-1 uppercase tracking-wider">
+                          {exp.job_type.replace('_', ' ')} • {exp.format} 
+                          {exp.byte_size ? ` • ${(exp.byte_size / (1024 * 1024)).toFixed(1)} MB` : ''}
+                        </p>
+                      </div>
+                      
+                      {isUnavailable ? (
+                        <div className="px-3 py-1.5 bg-red-500/10 text-red-400 text-xs font-bold rounded border border-red-500/20 uppercase tracking-wider">
+                          {isArchived ? 'Archived' : isPurged ? 'Purged' : 'Expired'}
+                        </div>
+                      ) : !packageData.allow_download ? (
+                        <div className="px-3 py-1.5 bg-white/5 text-white/40 text-xs rounded border border-white/5">
+                          Download Disabled
+                        </div>
+                      ) : (
+                        <a href={exp.file_url} download className="p-3 bg-brand/10 hover:bg-brand hover:text-black text-brand rounded-lg transition-colors">
+                          <Download className="w-5 h-5" />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Tracklist Preview */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 mt-4">
             <h3 className="text-lg font-bold">Tracklist</h3>
             <div className="bg-surface border border-white/5 rounded-xl overflow-hidden">
-              {packageData.manifest?.tracks?.map((track: any, idx: number) => (
+              {packageData.tracks?.map((track: any, idx: number) => (
                 <div key={idx} className="flex items-center gap-4 p-4 border-b border-white/5 last:border-0 bg-black/20 hover:bg-black/40 transition-colors">
                   <span className="w-8 text-center text-white/30 font-mono text-sm">{idx + 1}</span>
                   {track.thumbnail ? (

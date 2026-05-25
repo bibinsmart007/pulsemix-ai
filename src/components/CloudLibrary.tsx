@@ -1,6 +1,9 @@
 import React from "react";
-import { X, Cloud, Clock, Copy, GitBranch, ArrowRight, Share2, MessageSquare, CheckSquare, ListTodo, AlertTriangle } from "lucide-react";
+import { X, Cloud, Clock, Copy, GitBranch, ArrowRight, Share2, ListTodo, AlertTriangle, CheckSquare, Download } from "lucide-react";
 import ActivityFeed, { ActivityEvent } from "./ActivityFeed";
+import ExportManager from "./ExportManager";
+import AuditDrawer from "./AuditDrawer";
+import { ProjectHealthDashboard } from "./ProjectHealthDashboard";
 
 export interface ReviewTask {
   id: number;
@@ -42,6 +45,7 @@ interface CloudLibraryProps {
   onLoadSharedProject: (token: string) => void;
   onViewPublishLinks: (versionId: number) => void;
   onPublishVersion: (versionId: number) => void;
+  activeSessions: any[];
 }
 
 export default function CloudLibrary({
@@ -52,12 +56,35 @@ export default function CloudLibrary({
   onSaveCloudVersion,
   onLoadSharedProject,
   onViewPublishLinks,
-  onPublishVersion
+  onPublishVersion,
+  activeSessions
 }: CloudLibraryProps) {
   const [importToken, setImportToken] = React.useState("");
   const [projectEvents, setProjectEvents] = React.useState<ActivityEvent[]>([]);
   const [projectTasks, setProjectTasks] = React.useState<ReviewTask[]>([]);
   const [taskFilter, setTaskFilter] = React.useState<"all" | "open" | "completed">("open");
+
+  const [isAdminMode, setIsAdminMode] = React.useState(false);
+  const [isAuditDrawerOpen, setIsAuditDrawerOpen] = React.useState(false);
+  const [isHealthDashboardOpen, setIsHealthDashboardOpen] = React.useState(false);
+
+  const [isExportManagerOpen, setIsExportManagerOpen] = React.useState(false);
+  const [exportVersionId, setExportVersionId] = React.useState<number | null>(null);
+  const [exportVersionNumber, setExportVersionNumber] = React.useState<number | null>(null);
+  const [exportsList, setExportsList] = React.useState<any[]>([]);
+
+  const refreshExports = React.useCallback(() => {
+    if (cloudProject) {
+      fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/exports`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setExportsList(data.exports);
+          }
+        })
+        .catch(err => console.error("Failed to fetch exports:", err));
+    }
+  }, [cloudProject]);
 
   React.useEffect(() => {
     if (isOpen && cloudProject) {
@@ -78,8 +105,16 @@ export default function CloudLibrary({
           }
         })
         .catch(err => console.error("Failed to fetch tasks:", err));
+
+      refreshExports();
     }
-  }, [isOpen, cloudProject]);
+  }, [isOpen, cloudProject, refreshExports]);
+
+  const handleOpenExport = (versionId: number, versionNumber: number) => {
+    setExportVersionId(versionId);
+    setExportVersionNumber(versionNumber);
+    setIsExportManagerOpen(true);
+  };
 
   if (!isOpen) return null;
 
@@ -98,9 +133,52 @@ export default function CloudLibrary({
               <p className="text-sm text-white/50">Manage cloud saves and collaborate</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-4">
+            {cloudProject && (
+              <button 
+                onClick={() => setIsHealthDashboardOpen(true)}
+                className="text-xs font-bold px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-white flex items-center gap-1 transition-colors"
+              >
+                Project Health
+              </button>
+            )}
+            {isAdminMode && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch("http://localhost:8000/api/admin/retention/sweep", { method: "POST" });
+                    const data = await res.json();
+                    if (data.success) {
+                      alert(`Sweep Complete: ${data.swept.artifacts_archived} artifacts archived, ${data.swept.packages_expired} packages expired.`);
+                      refreshExports();
+                    }
+                  } catch (e) {
+                    alert("Sweep failed.");
+                  }
+                }}
+                className="text-xs font-bold px-3 py-1.5 rounded-full border border-yellow-500/20 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
+              >
+                Run Retention Sweep
+              </button>
+            )}
+            <button 
+              onClick={() => setIsAdminMode(!isAdminMode)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${isAdminMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-white/5 text-white/40 border-white/10 hover:text-white'}`}
+            >
+              Admin Mode {isAdminMode ? 'ON' : 'OFF'}
+            </button>
+            {isAdminMode && cloudProject && (
+              <button 
+                onClick={() => setIsAuditDrawerOpen(true)}
+                className="text-xs font-bold px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+              >
+                View Audit Logs
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
@@ -153,16 +231,24 @@ export default function CloudLibrary({
                       {projectTasks.filter(t => taskFilter === "all" || (taskFilter === "open" && t.status !== "done") || (taskFilter === "completed" && t.status === "done")).length === 0 ? (
                         <div className="text-sm text-white/30 italic p-4 text-center border border-white/5 rounded-lg bg-black/20">No tasks found</div>
                       ) : (
-                        projectTasks.filter(t => taskFilter === "all" || (taskFilter === "open" && t.status !== "done") || (taskFilter === "completed" && t.status === "done")).map(task => (
+                        projectTasks.filter(t => taskFilter === "all" || (taskFilter === "open" && t.status !== "done") || (taskFilter === "completed" && t.status === "done")).map(task => {
+                          const viewingSessions = activeSessions.filter(s => s.focus_target === `task_${task.id}`);
+                          return (
                           <div key={task.id} className="flex items-center justify-between bg-black/40 border border-white/5 rounded-lg p-3">
                             <div className="flex items-center gap-3">
                               {task.status === "done" ? <CheckSquare className="w-4 h-4 text-emerald-500" /> : task.status === "blocked" ? <AlertTriangle className="w-4 h-4 text-red-500" /> : <div className="w-4 h-4 rounded-sm border-2 border-white/20" />}
                               <div className="flex flex-col">
                                 <span className={`text-sm ${task.status === "done" ? "text-white/40 line-through" : "text-white"}`}>{task.title}</span>
-                                <span className="text-[10px] text-white/40 flex items-center gap-2">
+                                <span className="text-[10px] text-white/40 flex items-center gap-2 mt-1">
                                   {task.assignee_label && <span className="bg-brand/20 text-brand px-1.5 py-0.5 rounded uppercase">{task.assignee_label}</span>}
                                   {task.priority === "high" && <span className="text-red-400">High Priority</span>}
                                   <span>Version {cloudProject.versions.find(v => v.id === task.version_id)?.version_number || "?"}</span>
+                                  {viewingSessions.length > 0 && (
+                                    <span className="bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                      {viewingSessions.length} active
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -170,7 +256,7 @@ export default function CloudLibrary({
                               View
                             </button>
                           </div>
-                        ))
+                        )})
                       )}
                     </div>
                   </div>
@@ -197,6 +283,12 @@ export default function CloudLibrary({
                               </div>
                             </div>
                             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => handleOpenExport(v.id, v.version_number)}
+                                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white flex items-center gap-1 transition-colors"
+                              >
+                                <Download className="w-3 h-3" /> Export
+                              </button>
                               <button 
                                 onClick={() => onViewPublishLinks(v.id)}
                                 className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white flex items-center gap-1 transition-colors"
@@ -264,6 +356,31 @@ export default function CloudLibrary({
 
         </div>
       </div>
+      
+      {cloudProject && exportVersionId !== null && exportVersionNumber !== null && (
+        <ExportManager
+          isOpen={isExportManagerOpen}
+          onClose={() => setIsExportManagerOpen(false)}
+          projectId={cloudProject.id}
+          versionId={exportVersionId}
+          versionNumber={exportVersionNumber}
+          existingExports={exportsList.filter(e => e.version_id === exportVersionId)}
+          onRefreshExports={refreshExports}
+        />
+      )}
+      {cloudProject && (
+        <AuditDrawer
+          isOpen={isAuditDrawerOpen}
+          onClose={() => setIsAuditDrawerOpen(false)}
+          projectId={cloudProject.id}
+        />
+      )}
+      {isHealthDashboardOpen && cloudProject && (
+        <ProjectHealthDashboard
+          projectId={cloudProject.id}
+          onClose={() => setIsHealthDashboardOpen(false)}
+        />
+      )}
     </div>
   );
 }

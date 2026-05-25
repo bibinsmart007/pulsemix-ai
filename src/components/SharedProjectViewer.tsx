@@ -9,6 +9,7 @@ interface SharedProjectViewerProps {
   onExitReviewMode: () => void;
   onToggleReviewPanel: () => void;
   isReviewPanelOpen: boolean;
+  activeSessions: any[];
 }
 
 export default function SharedProjectViewer({
@@ -16,7 +17,8 @@ export default function SharedProjectViewer({
   sharedProject,
   onExitReviewMode,
   onToggleReviewPanel,
-  isReviewPanelOpen
+  isReviewPanelOpen,
+  activeSessions
 }: SharedProjectViewerProps) {
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(false);
   const [projectEvents, setProjectEvents] = useState<ActivityEvent[]>([]);
@@ -39,13 +41,22 @@ export default function SharedProjectViewer({
   return (
     <div className="absolute top-0 left-0 right-0 z-40 bg-amber-500/20 border-b border-amber-500/50 backdrop-blur-md px-6 py-3 flex items-center justify-between shadow-lg">
       <div className="flex items-center gap-4">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-500">
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-500 relative">
           <Eye className="w-4 h-4" />
+          {activeSessions.length > 1 && (
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#1E1E1E]" />
+          )}
         </div>
         <div>
           <h3 className="font-bold text-amber-500 flex items-center gap-2">
             Shared Review Mode
             <span className="text-xs bg-amber-500/20 px-2 py-0.5 rounded uppercase tracking-wider">Read Only</span>
+            {activeSessions.length > 1 && (
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full flex items-center gap-1 ml-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                {activeSessions.length} viewers here now
+              </span>
+            )}
           </h3>
           <p className="text-xs text-amber-500/70">
             Viewing: {sharedProject?.name || "Shared Project"} (Version {sharedProject?.versions[0]?.version_number || "?"})

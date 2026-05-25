@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import sqlite3
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from extractor import resolve_youtube_audio
 from analyzer import analyze_audio
-from database import init_db, get_db_connection, get_track_metadata, save_track_metadata, get_all_tracks, create_playlist, get_playlists, add_item_to_playlist, update_playlist_item, delete_playlist_item, get_playlist_items, create_export_job, get_export_job, get_all_exports, log_activity_event, get_activity_events
+from database import init_db, get_db_connection, get_track_metadata, save_track_metadata, get_all_tracks, create_playlist, get_playlists, add_item_to_playlist, update_playlist_item, delete_playlist_item, get_playlist_items, create_export_job, get_export_job, get_all_exports, log_activity_event, get_activity_events, log_audit_event, get_audit_logs
 from backend.stem_extractor import run_stem_extraction
 import uuid
 import time
@@ -632,6 +632,86 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = None
     due_at: Optional[float] = None
 
+# ==========================================
+# Phase 25: Presence Manager
+# ==========================================
+import time
+from typing import Dict, List, Optional
+from pydantic import BaseModel
+
+class PresencePing(BaseModel):
+    user_label: str
+    project_id: int
+    version_id: Optional[int] = None
+    action: str = "viewing" # viewing, reviewing, editing
+    focus_target: Optional[str] = None # e.g. "comment_12", "task_5"
+
+class ActiveSession(BaseModel):
+    session_id: str
+    user_label: str
+    project_id: int
+    version_id: Optional[int]
+    action: str
+    focus_target: Optional[str]
+    last_seen_ms: int
+
+# Phase 26 Models
+class CloudExportCreate(BaseModel):
+    version_id: int
+    job_type: str # 'full_mix', 'preview', 'stems'
+    format: str # 'mp3', 'wav', 'zip'
+
+class CloudExportUpdate(BaseModel):
+    status: str
+    file_url: Optional[str] = None
+    error_message: Optional[str] = None
+
+class PresenceManager:
+    def __init__(self):
+        # Maps session_id to ActiveSession
+        self.sessions: Dict[str, ActiveSession] = {}
+        self.timeout_ms = 15000 # 15 seconds
+
+    def ping(self, session_id: str, ping_data: PresencePing):
+        self.sessions[session_id] = ActiveSession(
+            session_id=session_id,
+            user_label=ping_data.user_label,
+            project_id=ping_data.project_id,
+            version_id=ping_data.version_id,
+            action=ping_data.action,
+            focus_target=ping_data.focus_target,
+            last_seen_ms=int(time.time() * 1000)
+        )
+        self._cleanup()
+
+    def get_project_presence(self, project_id: int) -> List[ActiveSession]:
+        self._cleanup()
+        return [s for s in self.sessions.values() if s.project_id == project_id]
+
+    def _cleanup(self):
+        now = int(time.time() * 1000)
+        stale_keys = [k for k, v in self.sessions.items() if now - v.last_seen_ms > self.timeout_ms]
+        for k in stale_keys:
+            del self.sessions[k]
+
+presence_manager = PresenceManager()
+
+@app.post("/api/cloud/presence")
+def api_post_presence(ping_data: PresencePing, request: Request):
+    # Use client IP + user_label as a mock session_id for now
+    client_ip = request.client.host if request.client else "unknown"
+    session_id = f"{client_ip}_{ping_data.user_label}"
+    presence_manager.ping(session_id, ping_data)
+    return {"success": True}
+
+@app.get("/api/cloud/presence/{project_id}")
+def api_get_presence(project_id: int):
+    sessions = presence_manager.get_project_presence(project_id)
+    return {"success": True, "sessions": [s.dict() for s in sessions]}
+
+# ==========================================
+# Tasks Endpoints
+# ==========================================
 @app.get("/api/cloud/projects/{project_id}/tasks")
 def api_get_tasks(project_id: int):
     try:
@@ -764,10 +844,11 @@ def api_update_version_status(version_id: int, req: StatusUpdate):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("UPDATE cloud_project_versions SET review_status = ? WHERE id = ?", (req.status, version_id))
-        
-        res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
+        res = cursor.execute("SELECT project_id, review_status FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
         project_id = res[0] if res else 0
+        old_status = res[1] if res else None
+        
+        cursor.execute("UPDATE cloud_project_versions SET review_status = ? WHERE id = ?", (req.status, version_id))
         
         conn.commit()
         conn.close()
@@ -780,6 +861,17 @@ def api_update_version_status(version_id: int, req: StatusUpdate):
                 actor="Collaborator",
                 metadata={"new_status": req.status},
                 importance="high"
+            )
+            
+            log_audit_event(
+                project_id=project_id,
+                actor="Collaborator",
+                entity_type="version",
+                entity_id=version_id,
+                action_type="update_status",
+                severity="medium",
+                before_json={"review_status": old_status},
+                after_json={"review_status": req.status}
             )
             
         return {"success": True}
@@ -1014,6 +1106,7 @@ class PublishCreate(BaseModel):
     expires_in_hours: Optional[int] = None
     recipient_label: Optional[str] = None
     password: Optional[str] = None
+    export_ids: Optional[List[int]] = None
 
 @app.post("/api/cloud/versions/{version_id}/publish")
 def api_publish_version(version_id: int, req: PublishCreate):
@@ -1033,6 +1126,13 @@ def api_publish_version(version_id: int, req: PublishCreate):
         
         package_id = cursor.lastrowid
         
+        if req.export_ids:
+            for export_id in req.export_ids:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO package_exports (package_id, export_job_id)
+                    VALUES (?, ?)
+                """, (package_id, export_id))
+        
         # Get project_id
         res = cursor.execute("SELECT project_id FROM cloud_project_versions WHERE id = ?", (version_id,)).fetchone()
         project_id = res[0] if res else 0
@@ -1049,6 +1149,16 @@ def api_publish_version(version_id: int, req: PublishCreate):
                 target_id=package_id,
                 metadata={"package_type": req.package_type, "recipient_label": req.recipient_label},
                 importance="high"
+            )
+            
+            log_audit_event(
+                project_id=project_id,
+                actor="Creator",
+                entity_type="package",
+                entity_id=package_id,
+                action_type="publish_package",
+                severity="high",
+                after_json={"package_type": req.package_type, "allow_download": req.allow_download, "exports": req.export_ids}
             )
             
         return {"success": True, "publish_token": publish_token}
@@ -1109,6 +1219,15 @@ def api_get_public_publish(publish_token: str, pwd: Optional[str] = None):
                 importance="high"
             )
         
+        # Fetch linked exports
+        exports = conn.execute("""
+            SELECT e.*, a.byte_size, a.mime_type, a.retention_policy, a.retention_source, a.status as status_artifact, a.expires_at, a.id as stored_artifact_id
+            FROM export_jobs e
+            JOIN package_exports pe ON pe.export_job_id = e.id
+            JOIN stored_artifacts a ON e.artifact_id = a.id
+            WHERE pe.package_id = ?
+        """, (package["id"],)).fetchall()
+        
         # Load the raw manifest payload
         raw_manifest = json.loads(version["payload_json"])
         
@@ -1131,7 +1250,16 @@ def api_get_public_publish(publish_token: str, pwd: Optional[str] = None):
             "package_type": package["package_type"],
             "allow_download": bool(package["allow_download"]),
             "published_at": package["created_at"],
-            "audio_url": f"/api/export/mock_audio_{publish_token}"
+            "audio_url": f"/api/export/mock_audio_{publish_token}",
+            "project_name": project["name"],
+            "version_number": version["version_number"],
+            "manifest": raw_manifest,
+            "exports": [
+                {
+                    **dict(e),
+                    "file_url": f"/api/public/publish/{publish_token}/download/{e['stored_artifact_id']}"
+                } for e in exports
+            ]
         }
         
         return {"success": True, "package": public_manifest}
@@ -1210,6 +1338,17 @@ def api_revoke_publish(publish_token: str):
                 importance="normal"
             )
             
+            log_audit_event(
+                project_id=project_id,
+                actor="Creator",
+                entity_type="package",
+                entity_id=package[0],
+                action_type="revoke_package",
+                severity="high",
+                before_json={"is_revoked": 0},
+                after_json={"is_revoked": 1}
+            )
+            
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1221,4 +1360,300 @@ def api_get_cloud_project_activity(project_id: int):
         return {"success": True, "events": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+        
+@app.get("/api/cloud/projects/{project_id}/audit")
+def api_get_cloud_project_audit(project_id: int):
+    try:
+        logs = get_audit_logs(project_id)
+        return {"success": True, "logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+# Phase 26: Export / Render Pipeline
+
+def simulate_export(job_id: int, project_id: int, version_id: int, job_type: str):
+    time.sleep(2)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE export_jobs SET status = 'running' WHERE id = ?", (job_id,))
+    conn.commit()
+    conn.close()
+    
+    time.sleep(8)
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Calculate expiration based on job type
+    now = time.time()
+    retention_days = 7 if job_type == 'stems' else 30
+    expires_at = now + (retention_days * 86400)
+    
+    # Create the stored artifact
+    cursor.execute("""
+        INSERT INTO stored_artifacts 
+        (project_id, version_id, storage_provider, object_key, mime_type, byte_size, checksum, expires_at, retention_policy, retention_source, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        project_id, 
+        version_id, 
+        "local_mock", 
+        f"project_{project_id}/version_{version_id}/export_{job_id}.wav",
+        "audio/wav",
+        15_420_000 + job_id * 1024, # Fake byte size (~15MB)
+        f"mock_sha256_{job_id}",
+        expires_at,
+        f"{retention_days}_days",
+        "class_default",
+        now
+    ))
+    artifact_id = cursor.lastrowid
+    
+    cursor.execute("UPDATE export_jobs SET status = 'completed', completed_at = ?, artifact_id = ? WHERE id = ?", 
+                   (time.time(), artifact_id, job_id))
+    conn.commit()
+    conn.close()
+
+@app.post("/api/cloud/projects/{project_id}/export")
+def api_create_cloud_export(project_id: int, req: CloudExportCreate, bg_tasks: BackgroundTasks):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO export_jobs (project_id, version_id, job_type, format, artifact_label, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (project_id, req.version_id, req.job_type, req.format, f"{req.job_type.replace('_', ' ').title()} ({req.format.upper()})", time.time()))
+        job_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        bg_tasks.add_task(simulate_export, job_id, project_id, req.version_id, req.job_type)
+        
+        log_audit_event(
+            project_id=project_id,
+            actor="Collaborator",
+            entity_type="export_job",
+            entity_id=job_id,
+            action_type="create_export",
+            severity="low",
+            after_json={"job_type": req.job_type, "format": req.format}
+        )
+        
+        return {"success": True, "job_id": job_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cloud/projects/{project_id}/exports")
+def api_get_cloud_exports(project_id: int):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        exports = conn.execute("""
+            SELECT e.*, a.byte_size, a.mime_type, a.retention_policy, a.retention_source, a.status as status_artifact, a.expires_at 
+            FROM export_jobs e
+            LEFT JOIN stored_artifacts a ON e.artifact_id = a.id
+            WHERE e.project_id = ? ORDER BY e.created_at DESC
+        """, (project_id,)).fetchall()
+        conn.close()
+        
+        result = []
+        for row in exports:
+            d = dict(row)
+            if d.get("artifact_id"):
+                d["file_url"] = f"/api/artifacts/{d['artifact_id']}/download"
+            result.append(d)
+            
+        return {"success": True, "exports": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+from fastapi.responses import PlainTextResponse
+
+@app.get("/api/artifacts/{artifact_id}/download")
+def api_download_artifact(artifact_id: int):
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    artifact = conn.execute("SELECT * FROM stored_artifacts WHERE id = ?", (artifact_id,)).fetchone()
+    conn.close()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    if artifact["status"] in ["archived", "purged"]:
+        raise HTTPException(status_code=410, detail="Artifact is archived or purged and no longer available for download")
+        
+    return PlainTextResponse(content=f"MOCK AUDIO BINARY CONTENT FOR {artifact['object_key']}", media_type=artifact["mime_type"], headers={
+        "Content-Disposition": f"attachment; filename=export_{artifact_id}.wav"
+    })
+
+@app.get("/api/public/publish/{token}/download/{artifact_id}")
+def api_download_public_artifact(token: str, artifact_id: int):
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    
+    package = conn.execute("SELECT * FROM published_packages WHERE publish_token = ? AND is_revoked = 0", (token,)).fetchone()
+    if not package:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Invalid or revoked package link")
+        
+    if not package["allow_download"]:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Downloads are disabled for this package")
+        
+    link = conn.execute("""
+        SELECT a.* FROM package_exports pe
+        JOIN export_jobs e ON pe.export_job_id = e.id
+        JOIN stored_artifacts a ON e.artifact_id = a.id
+        WHERE pe.package_id = ? AND a.id = ?
+    """, (package["id"], artifact_id)).fetchone()
+    
+    conn.close()
+    
+    if not link:
+        raise HTTPException(status_code=404, detail="Artifact not found in this package")
+    if link["status"] in ["archived", "purged"]:
+        raise HTTPException(status_code=410, detail="Artifact is archived or purged and no longer available for download")
+        
+    return PlainTextResponse(content=f"MOCK AUDIO BINARY CONTENT FOR {link['object_key']}", media_type=link["mime_type"], headers={
+        "Content-Disposition": f"attachment; filename=export_{artifact_id}.wav"
+    })
+
+@app.post("/api/admin/retention/sweep")
+def api_trigger_retention_sweep():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = time.time()
+        
+        # Sweep stored artifacts
+        cursor.execute("""
+            UPDATE stored_artifacts 
+            SET status = 'archived'
+            WHERE expires_at IS NOT NULL 
+              AND expires_at < ? 
+              AND status = 'active'
+        """, (now,))
+        artifacts_archived = cursor.rowcount
+        
+        # We could also sweep published_packages and revoke them if expires_at < now
+        cursor.execute("""
+            UPDATE published_packages
+            SET is_revoked = 1
+            WHERE expires_at IS NOT NULL
+              AND expires_at < ?
+              AND is_revoked = 0
+        """, (now,))
+        packages_expired = cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True, 
+            "swept": {
+                "artifacts_archived": artifacts_archived,
+                "packages_expired": packages_expired
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cloud/projects/{project_id}/health")
+def api_get_project_health(project_id: int):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        
+        now = time.time()
+        seven_days_ago = now - (7 * 86400)
+        thirty_days_ago = now - (30 * 86400)
+        
+        # 1. Tasks
+        tasks = conn.execute("SELECT status, is_blocked FROM tasks WHERE project_id = ?", (project_id,)).fetchall()
+        open_tasks = sum(1 for t in tasks if t["status"] in ["todo", "in_progress", "in_review"])
+        completed_tasks = sum(1 for t in tasks if t["status"] == "done")
+        blocked_tasks = sum(1 for t in tasks if t["is_blocked"])
+        
+        # 2. Approvals
+        latest_version = conn.execute("SELECT id, version_number, approval_status FROM cloud_project_versions WHERE project_id = ? ORDER BY version_number DESC LIMIT 1", (project_id,)).fetchone()
+        approval_state = latest_version["approval_status"] if latest_version else "none"
+        
+        # 3. Deliveries
+        packages = conn.execute("SELECT id, is_revoked, expires_at, created_at FROM published_packages WHERE version_id IN (SELECT id FROM cloud_project_versions WHERE project_id = ?)", (project_id,)).fetchall()
+        total_packages = len(packages)
+        revoked_packages = sum(1 for p in packages if p["is_revoked"])
+        expired_packages = sum(1 for p in packages if p["expires_at"] and p["expires_at"] < now)
+        
+        # Delivery Opens
+        package_ids = [p["id"] for p in packages]
+        opened_packages = 0
+        if package_ids:
+            placeholders = ",".join("?" * len(package_ids))
+            opens = conn.execute(f"SELECT package_id FROM published_package_access_logs WHERE package_id IN ({placeholders}) AND event_type = 'opened' GROUP BY package_id", package_ids).fetchall()
+            opened_packages = len(opens)
+            
+        unopened_packages = total_packages - opened_packages
+        
+        # 4. Exports
+        exports = conn.execute("SELECT status FROM export_jobs WHERE project_id = ?", (project_id,)).fetchall()
+        total_exports = len(exports)
+        failed_exports = sum(1 for e in exports if e["status"] == "failed")
+        running_exports = sum(1 for e in exports if e["status"] in ["running", "queued"])
+        
+        expiring_exports = conn.execute("""
+            SELECT count(*) as cnt FROM stored_artifacts 
+            WHERE project_id = ? AND status = 'active' AND expires_at IS NOT NULL AND expires_at < ?
+        """, (project_id, now + (7 * 86400))).fetchone()["cnt"]
+        
+        # 5. Activity Window
+        recent_activity_count = conn.execute("SELECT count(*) as cnt FROM activity_events WHERE project_id = ? AND created_at > ?", (project_id, seven_days_ago)).fetchone()["cnt"]
+        
+        conn.close()
+        
+        # Alert Heuristics
+        alerts = []
+        if blocked_tasks > 0:
+            alerts.append({"type": "blocked_tasks", "message": f"{blocked_tasks} tasks are currently blocked", "severity": "high"})
+        if unopened_packages > 0:
+            alerts.append({"type": "unopened_packages", "message": f"{unopened_packages} published packages have never been opened", "severity": "medium"})
+        if expiring_exports > 0:
+            alerts.append({"type": "expiring_exports", "message": f"{expiring_exports} exports will expire within 7 days", "severity": "low"})
+        if latest_version and approval_state == "in_review":
+            alerts.append({"type": "pending_approval", "message": f"Version {latest_version['version_number']} is waiting for approval", "severity": "medium"})
+
+        return {
+            "success": True,
+            "health": {
+                "tasks": {
+                    "open": open_tasks,
+                    "completed": completed_tasks,
+                    "blocked": blocked_tasks,
+                    "total": len(tasks)
+                },
+                "approvals": {
+                    "current_state": approval_state,
+                    "latest_version_id": latest_version["id"] if latest_version else None
+                },
+                "deliveries": {
+                    "total": total_packages,
+                    "revoked": revoked_packages,
+                    "expired": expired_packages,
+                    "opened": opened_packages,
+                    "unopened": unopened_packages
+                },
+                "exports": {
+                    "total": total_exports,
+                    "failed": failed_exports,
+                    "running": running_exports,
+                    "expiring_soon": expiring_exports
+                },
+                "activity_window": {
+                    "recent_events_7d": recent_activity_count
+                },
+                "alert_heuristics": alerts
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

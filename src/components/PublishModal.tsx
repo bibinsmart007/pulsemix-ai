@@ -8,6 +8,7 @@ export interface PublishConfig {
   password?: string;
   expiresHours?: number;
   recipientLabel?: string;
+  exportIds?: number[];
 }
 
 interface PublishModalProps {
@@ -15,15 +16,17 @@ interface PublishModalProps {
   onClose: () => void;
   onPublish: (config: PublishConfig) => void;
   isLoading?: boolean;
+  availableExports?: any[];
 }
 
-export default function PublishModal({ isOpen, onClose, onPublish, isLoading = false }: PublishModalProps) {
+export default function PublishModal({ isOpen, onClose, onPublish, isLoading = false, availableExports = [] }: PublishModalProps) {
   const [packageType, setPackageType] = useState<string>("private_preview");
   const [notes, setNotes] = useState<string>("");
   const [allowDownload, setAllowDownload] = useState<boolean>(false);
   const [password, setPassword] = useState<string>("");
   const [expiresHours, setExpiresHours] = useState<number | "">("");
   const [recipientLabel, setRecipientLabel] = useState<string>("");
+  const [selectedExportIds, setSelectedExportIds] = useState<number[]>([]);
 
   if (!isOpen) return null;
 
@@ -36,6 +39,7 @@ export default function PublishModal({ isOpen, onClose, onPublish, isLoading = f
       password: password || undefined,
       expiresHours: expiresHours === "" ? undefined : Number(expiresHours),
       recipientLabel: recipientLabel || undefined,
+      exportIds: selectedExportIds,
     });
   };
 
@@ -118,6 +122,43 @@ export default function PublishModal({ isOpen, onClose, onPublish, isLoading = f
               onChange={(e) => setNotes(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-brand transition-colors min-h-[80px]"
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-white/80">Attach Exported Audio</label>
+            <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+              {availableExports.filter(e => e.status === 'completed').length === 0 ? (
+                <div className="text-sm text-white/40 italic">
+                  No completed exports available for this version. Delivery will be metadata-only.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {availableExports.filter(e => e.status === 'completed').map(exp => (
+                    <label key={exp.id} className="flex items-center gap-3 cursor-pointer group p-2 rounded hover:bg-white/5 transition-colors">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${selectedExportIds.includes(exp.id) ? 'bg-brand border-brand' : 'bg-black/50 border-white/20 group-hover:border-white/40'}`}>
+                        {selectedExportIds.includes(exp.id) && <Check className="w-3 h-3 text-black" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="hidden" 
+                        checked={selectedExportIds.includes(exp.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedExportIds([...selectedExportIds, exp.id]);
+                          } else {
+                            setSelectedExportIds(selectedExportIds.filter(id => id !== exp.id));
+                          }
+                        }}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm text-white/90 group-hover:text-white transition-colors">{exp.artifact_label}</span>
+                        <span className="text-xs text-white/40">{exp.file_url}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="p-4 bg-black/30 border border-white/5 rounded-xl flex flex-col gap-4">

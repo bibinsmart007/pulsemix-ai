@@ -283,6 +283,88 @@ def init_db():
         )
     """)
     
+    # Phase 26 Migrations
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS export_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            version_id INTEGER NOT NULL,
+            job_type TEXT NOT NULL,
+            format TEXT NOT NULL,
+            status TEXT DEFAULT 'queued',
+            file_url TEXT,
+            artifact_label TEXT,
+            error_message TEXT,
+            created_at REAL NOT NULL,
+            completed_at REAL,
+            artifact_id INTEGER,
+            FOREIGN KEY(project_id) REFERENCES cloud_projects(id) ON DELETE CASCADE,
+            FOREIGN KEY(version_id) REFERENCES cloud_project_versions(id) ON DELETE CASCADE
+        )
+    """)
+    # Try adding artifact_id if missing (for existing Phase 26 db)
+    try:
+        cursor.execute("ALTER TABLE export_jobs ADD COLUMN artifact_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS package_exports (
+            package_id INTEGER NOT NULL,
+            export_job_id INTEGER NOT NULL,
+            PRIMARY KEY(package_id, export_job_id),
+            FOREIGN KEY(package_id) REFERENCES published_packages(id) ON DELETE CASCADE,
+            FOREIGN KEY(export_job_id) REFERENCES export_jobs(id) ON DELETE CASCADE
+        )
+    """)
+    
+    # Phase 27 Migrations
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stored_artifacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            version_id INTEGER,
+            storage_provider TEXT NOT NULL,
+            object_key TEXT NOT NULL,
+            mime_type TEXT,
+            byte_size INTEGER,
+            checksum TEXT,
+            storage_class TEXT DEFAULT 'internal',
+            retention_policy TEXT DEFAULT 'permanent',
+            retention_source TEXT DEFAULT 'class_default',
+            access_policy TEXT DEFAULT 'private',
+            status TEXT DEFAULT 'active',
+            last_verified_at REAL,
+            expires_at REAL,
+            created_at REAL NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES cloud_projects(id) ON DELETE CASCADE,
+            FOREIGN KEY(version_id) REFERENCES cloud_project_versions(id) ON DELETE CASCADE
+        )
+    """)
+    try:
+        cursor.execute("ALTER TABLE stored_artifacts ADD COLUMN status TEXT DEFAULT 'active'")
+        cursor.execute("ALTER TABLE stored_artifacts ADD COLUMN retention_source TEXT DEFAULT 'class_default'")
+    except sqlite3.OperationalError:
+        pass
+
+    # Phase 28 Migrations
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            actor TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            severity TEXT DEFAULT 'low',
+            before_json TEXT,
+            after_json TEXT,
+            source_context TEXT,
+            timestamp REAL NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES cloud_projects(id) ON DELETE CASCADE
+        )
+    """)
+
     # Inject a known row for the cache verification snapshot
     cursor.execute("""
         INSERT OR IGNORE INTO tracks (youtube_url, title, bpm, bpm_confidence, key_signature, duration, genre, url, filepath, analysis_version, waveform_data)
@@ -392,47 +474,53 @@ def log_activity_event(project_id: int, event_type: str, actor: str = "System", 
     import json
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO activity_events (project_id, version_id, event_type, actor, target_id, metadata_json, importance, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        project_id, 
-        version_id, 
-        event_type, 
-        actor, 
-        target_id, 
-        json.dumps(metadata) if metadata else None,
-        importance,
-        time.time()
-    ))
-    conn.commit()
+    try:
+        cursor.execute("""
+            INSERT INTO activity_events (project_id, version_id, event_type, actor, target_id, metadata_json, importance, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            project_id, 
+            version_id, 
+            event_type, 
+            actor, 
+            target_id, 
+            json.dumps(metadata) if metadata else None,
+            importance,
+            time.time()
+        ))
+        conn.commit()
+    except Exception as e:
+        print(f"Error logging activity: {e}")
     conn.close()
 
-def get_activity_events(project_id: int) -> list[Dict[str, Any]]:
-    conn = get_db_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT * FROM activity_events 
-        WHERE project_id = ? 
-        ORDER BY created_at DESC
-    """, (project_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    
-    events = []
-    for row in rows:
-        event = dict(row)
-        import json
-        if event.get("metadata_json"):
-            try:
-                event["metadata"] = json.loads(event["metadata_json"])
-            except json.JSONDecodeError:
+def get_activity_events(project_id, limit=50):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        events = conn.execute("""
+            SELECT * FROM activity_events
+            WHERE project_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (project_id, limit)).fetchall()
+        conn.close()
+        
+        results = []
+        for row in events:
+            event = dict(row)
+            import json
+            if event.get("metadata_json"):
+                try:
+                    event["metadata"] = json.loads(event["metadata_json"])
+                except json.JSONDecodeError:
+                    event["metadata"] = {}
+            else:
                 event["metadata"] = {}
-        else:
-            event["metadata"] = {}
-        events.append(event)
-    return events
+            results.append(event)
+        return results
+    except Exception as e:
+        print(f"Error fetching activity events: {e}")
+        return []
 
 def update_playlist_item(item_id: int, updates: dict):
     conn = sqlite3.connect(DB_PATH)
@@ -530,3 +618,35 @@ def get_all_exports() -> list[Dict[str, Any]]:
     conn.close()
     return [dict(row) for row in rows]
 
+def log_audit_event(project_id, actor, entity_type, entity_id, action_type, severity='low', before_json=None, after_json=None, source_context=None):
+    try:
+        import json, time
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO audit_logs (project_id, actor, entity_type, entity_id, action_type, severity, before_json, after_json, source_context, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (project_id, actor, entity_type, str(entity_id), action_type, severity, 
+              json.dumps(before_json) if before_json else None, 
+              json.dumps(after_json) if after_json else None, 
+              source_context, time.time()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error logging audit: {e}")
+
+def get_audit_logs(project_id, limit=100):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        logs = conn.execute("""
+            SELECT * FROM audit_logs
+            WHERE project_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (project_id, limit)).fetchall()
+        conn.close()
+        return [dict(l) for l in logs]
+    except Exception as e:
+        print(f"Error fetching audit logs: {e}")
+        return []

@@ -42,6 +42,7 @@ import SharedProjectViewer from "@/components/SharedProjectViewer";
 import ReviewPanel, { ProjectComment } from "@/components/ReviewPanel";
 import PublishModal, { PublishConfig } from "@/components/PublishModal";
 import AccessManager, { PublishLink } from "@/components/AccessManager";
+import { usePresence, ActiveSession } from "@/hooks/usePresence";
 
 export default function Home() {
   const engine = useAudioEngine();
@@ -70,6 +71,7 @@ export default function Home() {
   // Phase 20: Publishing
   const [showPublishModal, setShowPublishModal] = useState<boolean>(false);
   const [publishTargetVersion, setPublishTargetVersion] = useState<number | null>(null);
+  const [publishTargetExports, setPublishTargetExports] = useState<any[]>([]);
   const [publishPackageType, setPublishPackageType] = useState<string>("private_preview");
   const [publishNotes, setPublishNotes] = useState<string>("");
   const [publicPublishData, setPublicPublishData] = useState<any | null>(null);
@@ -94,6 +96,12 @@ export default function Home() {
   const [projectComments, setProjectComments] = useState<ProjectComment[]>([]);
   const [currentVersionId, setCurrentVersionId] = useState<number | null>(null);
   
+  // Phase 25: Presence
+  const { activeSessions, setAction, setFocusTarget } = usePresence(
+    cloudProject?.id || null,
+    currentVersionId,
+    "Guest_" + Math.floor(Math.random() * 1000)
+  );
 
   const [activePlaylistItems, setActivePlaylistItems] = useState<any[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(3);
@@ -201,32 +209,28 @@ export default function Home() {
     }
   };
 
-  // Phase 20/21: Publishing Handlers
-  const handlePublishVersion = async () => {
+  // Phase 20/21/26: Publishing Handlers
+  const handlePublishVersion = async (config: PublishConfig) => {
     if (!publishTargetVersion) return;
     try {
       const res = await fetch(`http://127.0.0.1:8000/api/cloud/versions/${publishTargetVersion}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          package_type: publishPackageType,
-          notes: publishNotes,
-          allow_download: publishAllowDownload,
-          expires_in_hours: publishExpiresHours,
-          password: publishPassword,
-          recipient_label: publishRecipientLabel
+          package_type: config.packageType,
+          notes: config.notes,
+          allow_download: config.allowDownload,
+          expires_in_hours: config.expiresHours,
+          password: config.password,
+          recipient_label: config.recipientLabel,
+          export_ids: config.exportIds
         })
       });
       const data = await res.json();
       if (data.success) {
         addToast("Version published!", "success");
         setShowPublishModal(false);
-        setPublishNotes("");
-        setPublishPackageType("private_preview");
-        setPublishPassword("");
-        setPublishAllowDownload(false);
-        setPublishExpiresHours(null);
-        setPublishRecipientLabel("");
+        setPublishTargetExports([]);
         
         // Simulate opening the public link
         handleOpenPublicLink(data.publish_token);
@@ -716,14 +720,42 @@ export default function Home() {
         activePlaylistId={activePlaylistId}
         cloudProject={cloudProject}
         onSaveCloudVersion={() => {}}
-        onLoadSharedProject={(token) => {}}
-        onViewPublishLinks={(versionId) => {}}
-        onPublishVersion={(versionId) => {}}
+        onLoadSharedProject={() => {}}
+        onViewPublishLinks={(versionId) => {
+          setPublishTargetVersion(versionId);
+          fetch(`http://127.0.0.1:8000/api/cloud/versions/${versionId}/links`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                setActivePublishLinks(data.links);
+                setShowLinksModal(true);
+              }
+            });
+        }}
+        onPublishVersion={(versionId) => {
+          setPublishTargetVersion(versionId);
+          if (cloudProject) {
+            fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/exports`)
+              .then(res => res.json())
+              .then(data => {
+                if (data.success) {
+                  setPublishTargetExports(data.exports.filter((e: any) => e.version_id === versionId));
+                }
+              })
+              .finally(() => {
+                setShowPublishModal(true);
+              });
+          } else {
+            setShowPublishModal(true);
+          }
+        }}
+        activeSessions={activeSessions}
       />
       <PublishModal 
         isOpen={showPublishModal}
         onClose={() => setShowPublishModal(false)}
-        onPublish={(config) => {}}
+        onPublish={handlePublishVersion}
+        availableExports={publishTargetExports}
       />
       <AccessManager 
         isOpen={showLinksModal}
@@ -734,10 +766,9 @@ export default function Home() {
       <ReviewPanel 
         isOpen={isReviewPanelOpen}
         onClose={() => setIsReviewPanelOpen(false)}
-        comments={projectComments}
-        onAddComment={async () => {}}
-        onResolveComment={async () => {}}
         currentVersionId={currentVersionId}
+        activeSessions={activeSessions}
+        onSetFocus={(target) => setFocusTarget(target)}
       />
       <SharedProjectViewer 
         isReviewMode={isReviewMode}
@@ -745,6 +776,7 @@ export default function Home() {
         onExitReviewMode={() => setIsReviewMode(false)}
         onToggleReviewPanel={() => setIsReviewPanelOpen(!isReviewPanelOpen)}
         isReviewPanelOpen={isReviewPanelOpen}
+        activeSessions={activeSessions}
       />
 
       {/* Top Navigation & Workspace Header */}
