@@ -3,8 +3,11 @@ import os
 import json
 import numpy as np
 from pydub import AudioSegment
+import math
+import concurrent.futures
+from backend.timing import resolve_snapped_boundaries
 from pydub.generators import Sine
-from database import update_export_status, get_playlist_items, update_export_metadata
+from backend.database import update_export_status, get_playlist_items, update_export_metadata
 from scipy import signal
 import librosa
 import array
@@ -125,13 +128,47 @@ def apply_custom_crossfade(seg1: AudioSegment, seg2: AudioSegment, xfade_ms: int
     
     mixed_samples = (samples1[:min_len] * env_out[:min_len]) + (samples2[:min_len] * env_in[:min_len])
     
-    import array
-    mixed_array = array.array(seg1_fade.array_type, np.int16(np.clip(mixed_samples, -32768, 32767)))
-    mixed_fade_seg = seg1_fade._spawn(mixed_array)
+    clipped = np.clip(mixed_samples, -32768, 32767).astype(np.int16)
+    mixed_fade_seg = seg1_fade._spawn(clipped.tobytes())
     
     return seg1_base + mixed_fade_seg + seg2_base
 
-def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master_bus_mode: str = "Balanced"):
+def apply_stem_crossfade_parallel(mix_stems: dict, track_stems: dict, xfade_ms: int, curve: str = 'linear', duck_amount_db: float = 0.0, eq_mode: str = 'none') -> dict:
+    if xfade_ms <= 0:
+        return {k: mix_stems[k] + track_stems[k] for k in mix_stems}
+    
+    new_mix_stems = {}
+    
+    for k in mix_stems:
+        m_stem = mix_stems[k]
+        t_stem = track_stems[k]
+        
+        duck = duck_amount_db
+        stem_curve = curve
+
+        if eq_mode == 'bass_swap' and k == 'bass':
+            # Outgoing bass drops out, incoming bass comes in
+            # We can simulate a hard cut by making the crossfade extremely short for bass
+            # But since xfade_ms dictates alignment, we just zero out the crossfade region appropriately
+            # A simple approximation: just duck the bass heavily
+            duck = -60.0
+            stem_curve = 'linear'
+            
+        elif eq_mode == 'vocal_protect' and k == 'vocals':
+            # Outgoing vocals stay longer (don't fade as fast)
+            # Incoming vocals fade in slower
+            stem_curve = 'equal_power' # maintains more volume
+            duck = 0.0
+            
+        elif eq_mode == 'soft_exit' and k in ['drums', 'other']:
+            # Instrumental elements fade out faster
+            duck = -6.0
+
+        new_mix_stems[k] = apply_custom_crossfade(m_stem, t_stem, xfade_ms, curve=stem_curve, duck_amount_db=duck, eq_mode='none')
+
+    return new_mix_stems
+
+def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master_bus_mode: str = "Balanced", export_name: str = "Export", auto_phrase_snap: bool = True):
     """
     Background task to render a playlist into a continuous .wav file.
     """
@@ -142,7 +179,12 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
         if not items:
             raise Exception("Playlist is empty. Nothing to export.")
             
-        mix = AudioSegment.silent(duration=0)
+        mix_stems = {
+            "vocals": AudioSegment.silent(duration=0),
+            "drums": AudioSegment.silent(duration=0),
+            "bass": AudioSegment.silent(duration=0),
+            "other": AudioSegment.silent(duration=0)
+        }
         is_fallback = False
         
         timing_sources = set()
@@ -163,25 +205,59 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                 continue
                 
             try:
+                # Load track audio
                 track_audio = AudioSegment.from_file(filepath)
+                resolved_item = resolve_snapped_boundaries(item, auto_phrase_snap)
+                start_ms = resolved_item.get("trim_start_ms", 0.0)
+                end_ms = resolved_item.get("trim_end_ms", 0.0)
+                snapped_reason = resolved_item.get("snapped_reason")
                 
-                start_ms = item.get("trim_start_ms", 0)
-                end_ms = item.get("trim_end_ms", 0)
+                def trim_audio(audio, start, end):
+                    if end and end > start:
+                        return audio[int(start):int(end)]
+                    elif start > 0:
+                        return audio[int(start):]
+                    return audio
                 
-                if end_ms and end_ms > start_ms:
-                    track_audio = track_audio[start_ms:end_ms]
-                elif start_ms > 0:
-                    track_audio = track_audio[start_ms:]
+                track_audio = trim_audio(track_audio, start_ms, end_ms)
+
+                # Check if stems exist
+                stem_status = item.get("stem_status", "NOT_GENERATED")
+                track_stems = {}
                 
-                xfade = int(item.get("crossfade_duration_ms", 2000))
-                fade_curve = item.get("fade_curve", "linear")
-                duck_amount_db = float(item.get("duck_amount_db", 0.0))
-                eq_mode = item.get("eq_mode", "none")
+                if stem_status == "READY":
+                    # Load stems
+                    base_filename = item.get("youtube_url", "").replace("https://www.youtube.com/watch?v=", "")
+                    stems_dir = os.path.join(os.path.dirname(filepath), f"{base_filename}_stems")
+                    
+                    try:
+                        track_stems["vocals"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "vocals.wav")), start_ms, end_ms)
+                        track_stems["drums"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "drums.wav")), start_ms, end_ms)
+                        track_stems["bass"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "bass.wav")), start_ms, end_ms)
+                        track_stems["other"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "other.wav")), start_ms, end_ms)
+                    except Exception as stem_err:
+                        print(f"[Exporter] Failed to load stems for {filepath}, falling back to full mix: {stem_err}")
+                        track_stems = None
+
+                if not track_stems:
+                    # Fallback to full mix placed in 'other'
+                    silent = AudioSegment.silent(duration=len(track_audio))
+                    track_stems = {
+                        "vocals": silent,
+                        "drums": silent,
+                        "bass": silent,
+                        "other": track_audio
+                    }
+                
+                xfade = int(item.get("crossfade_duration_ms") if item.get("crossfade_duration_ms") is not None else 2000)
+                fade_curve = item.get("fade_curve") or "linear"
+                duck_amount_db = float(item.get("duck_amount_db") if item.get("duck_amount_db") is not None else 0.0)
+                eq_mode = item.get("eq_mode") or "none"
                 sync_mode = item.get("sync_mode", "auto")
                 incoming_bpm = item.get("bpm", 0)
                 
-                if len(mix) == 0:
-                    mix = track_audio
+                if len(mix_stems["other"]) == 0:
+                    mix_stems = track_stems
                     transitions_applied.append({
                         "boundary": i,
                         "curve": "start",
@@ -200,11 +276,13 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                         if 0.85 <= ratio <= 1.15:
                             sync_ratio = ratio
                             sync_status = "FULL_TRACK_STRETCH"
-                            track_audio = apply_time_stretch(track_audio, sync_ratio)
+                            # Stretch all stems
+                            for k in track_stems:
+                                track_stems[k] = apply_time_stretch(track_stems[k], sync_ratio)
                         else:
                             sync_status = "BYPASSED_OUT_OF_BOUNDS"
                             
-                    mix = apply_custom_crossfade(mix, track_audio, xfade, curve=fade_curve, duck_amount_db=duck_amount_db, eq_mode=eq_mode)
+                    mix_stems = apply_stem_crossfade_parallel(mix_stems, track_stems, xfade, curve=fade_curve, duck_amount_db=duck_amount_db, eq_mode=eq_mode)
                     
                     t_info = {
                         "boundary": i,
@@ -212,7 +290,8 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                         "duration_ms": xfade,
                         "duck_db": duck_amount_db,
                         "source": source_type,
-                        "eq_mode": eq_mode
+                        "eq_mode": eq_mode,
+                        "snapped_reason": snapped_reason
                     }
                     if sync_mode == 'auto':
                         t_info["sync_ratio"] = round(sync_ratio, 3)
@@ -224,14 +303,24 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
             except Exception as e:
                 print(f"[Exporter] Failed to load track {filepath}: {e}")
                 is_fallback = True
-                track_audio = Sine(440 + (i * 100)).to_audio_segment(duration=5000)
+                
+                # Create a fallback tone
+                from pydub.generators import Sine
+                fallback_audio = Sine(440 + (i * 100)).to_audio_segment(duration=5000)
+                silent = AudioSegment.silent(duration=len(fallback_audio))
+                track_stems = {
+                    "vocals": silent,
+                    "drums": silent,
+                    "bass": silent,
+                    "other": fallback_audio
+                }
                 
                 xfade = int(item.get("crossfade_duration_ms", 1000))
                 
-                if len(mix) == 0:
-                    mix = track_audio
+                if len(mix_stems["other"]) == 0:
+                    mix_stems = track_stems
                 else:
-                    mix = mix.append(track_audio, crossfade=xfade)
+                    mix_stems = apply_stem_crossfade_parallel(mix_stems, track_stems, xfade)
                 
                 transitions_applied.append({
                     "boundary": i,
@@ -239,10 +328,14 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                     "duration_ms": xfade,
                     "duck_db": 0,
                     "source": "fallback",
-                    "eq_mode": "none"
+                    "eq_mode": "none",
+                    "snapped_reason": None
                 })
 
         update_export_status(job_id, "rendering", 70)
+        
+        # Combine stems into final mix
+        mix = mix_stems["other"].overlay(mix_stems["vocals"]).overlay(mix_stems["drums"]).overlay(mix_stems["bass"])
         
         # Simulate Master Bus Processing
         import time
@@ -257,29 +350,77 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
         
         update_export_status(job_id, "rendering", 90)
         
-        filename = f"{job_id}.wav"
-        file_path = os.path.join(EXPORT_DIR, filename)
+        # Generate export package
+        import zipfile
+        import json
+        import datetime
+        import shutil
         
-        mix.export(file_path, format="wav")
+        job_dir = os.path.join(EXPORT_DIR, job_id)
+        os.makedirs(job_dir, exist_ok=True)
         
-        update_export_metadata(job_id, {
-            "is_fallback": is_fallback,
-            "render_mode": "fallback" if is_fallback else "native",
-            "completed_at": time.time(),
-            "track_count": len(items),
-            "timing_sources": list(timing_sources),
-            "transitions_applied": transitions_applied,
+        wav_path = os.path.join(job_dir, "mix.wav")
+        mix.export(wav_path, format="wav")
+        
+        # We need to sanitize items for JSON (remove any non-serializable stuff, though it should be dicts)
+        sanitized_items = []
+        for it in items:
+            s_it = dict(it)
+            sanitized_items.append(s_it)
+            
+        manifest_data = {
+            "job_id": job_id,
+            "export_name": export_name,
+            "playlist_name": playlist_name,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "master_bus_mode": master_bus_mode,
+            "items": sanitized_items,
+            "transitions_applied": transitions_applied
+        }
+        manifest_path = os.path.join(job_dir, "manifest.json")
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2)
+            
+        tracklist_path = os.path.join(job_dir, "tracklist.txt")
+        with open(tracklist_path, "w", encoding="utf-8") as f:
+            f.write(f"Tracklist: {export_name}\n")
+            f.write("========================\n\n")
+            for idx, item in enumerate(items):
+                f.write(f"{idx + 1}. {item.get('title', 'Unknown Track')}\n")
+                if idx < len(transitions_applied):
+                    t = transitions_applied[idx]
+                    snap_text = f" | {t['snapped_reason']}" if t.get('snapped_reason') else " | Manual retained"
+                    f.write(f"   -> [Transition] {t['eq_mode']} | {t['duration_ms']}ms | {t['curve']}{snap_text}\n")
+                f.write("\n")
+                
+        zip_filename = f"{job_id}.zip"
+        zip_path = os.path.join(EXPORT_DIR, zip_filename)
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(wav_path, "mix.wav")
+            zf.write(manifest_path, "manifest.json")
+            zf.write(tracklist_path, "tracklist.txt")
+            
+        # Clean up temp dir
+        shutil.rmtree(job_dir, ignore_errors=True)
+        
+        download_url = f"/exports/{zip_filename}"
+        update_export_status(job_id, "completed", 100, download_url)
+        
+        meta_updates = {
             "master_bus": master_meta,
-            "file_size": os.path.getsize(file_path)
-        })
-        
-        download_url = f"/exports/{filename}"
-        update_export_status(job_id, "ready", 100, download_url)
+            "total_items": len(items),
+            "transitions": transitions_applied,
+            "duration_ms": len(mix),
+            "export_name": export_name
+        }
+        if is_fallback:
+            meta_updates["note"] = "Used mock audio due to missing source files."
+            
+        update_export_metadata(job_id, meta_updates)
         
     except Exception as e:
-        update_export_status(job_id, "failed", 0)
-        update_export_metadata(job_id, {
-            "error_reason": str(e),
-            "completed_at": time.time()
-        })
+        import traceback
+        traceback.print_exc()
+        update_export_status(job_id, "failed")
+        update_export_metadata(job_id, {"error": str(e)})
         print(f"[Exporter] Job {job_id} failed: {e}")

@@ -1,4 +1,4 @@
-export function computeTimelineBlocks(items: any[]) {
+export function computeTimelineBlocks(items: any[], globalAutoSnap: boolean = true) {
   const blocks = items.map((item, index) => {
     const durationMs = (item.duration || 0) * 1000; 
     const trimStart = item.trim_start_ms || 0;

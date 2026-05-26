@@ -1,3 +1,21 @@
+export type StemStatus = "NOT_GENERATED" | "EXTRACTING" | "READY" | "FAILED";
+
+export interface TrackMetadata {
+  id: string;
+  youtube_url: string;
+  title: string;
+  duration: number;
+  bpm: number;
+  key: string;
+  genre: string;
+  thumbnail: string;
+  stem_status?: StemStatus;
+  vocals_path?: string;
+  drums_path?: string;
+  bass_path?: string;
+  other_path?: string;
+}
+
 export interface DeckState {
   playing: boolean;
   duration: number;
@@ -12,12 +30,15 @@ export interface DeckState {
   eqMid: number;  // -12 to +12 dB
   eqHigh: number; // -12 to +12 dB
   filter: number; // -100 (LPF) to +100 (HPF), 0 is flat
+  cueEnabled: boolean; // Visual-only CUE state for V1
   stems: {
     vocals: number;   // 0 to 1
     melody: number;   // 0 to 1
     drums: number;    // 0 to 1 (low band)
   };
   title: string;
+  youtube_url?: string;
+  stem_status?: StemStatus;
   thumbnail: string;
   trackLoaded: boolean;
   loading: boolean;
@@ -42,12 +63,15 @@ export const initialDeckState = (title: string): DeckState => ({
   eqMid: 0,
   eqHigh: 0,
   filter: 0,
+  cueEnabled: false,
   stems: {
     vocals: 1.0,
     melody: 1.0,
     drums: 1.0,
   },
   title,
+  youtube_url: undefined,
+  stem_status: "NOT_GENERATED",
   thumbnail: "",
   trackLoaded: false,
   loading: false,

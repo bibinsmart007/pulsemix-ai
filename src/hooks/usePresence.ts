@@ -49,7 +49,7 @@ export function usePresence(
 
   useEffect(() => {
     if (!projectId) {
-      setActiveSessions([]);
+      setActiveSessions(prev => prev.length === 0 ? prev : []);
       return;
     }
 

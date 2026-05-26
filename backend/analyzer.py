@@ -85,8 +85,8 @@ class AudioAnalyzer:
             # Load 45 seconds of the song's middle/chorus portion for more accurate key/tempo detection
             self._y, self._sr = self.librosa.load(self.filepath, sr=22050, duration=45, offset=15)
 
-    def extract_bpm(self) -> tuple[float, float]:
-        """Essentia-like rhythm extractor returning (bpm, confidence)"""
+    def extract_bpm_and_beats(self) -> tuple[float, float, list[float], list[float], float]:
+        """Essentia-like rhythm extractor returning (bpm, confidence, beatgrid, phrase_markers, downbeat_confidence)"""
         self._load_audio()
         tempo, beats = self.librosa.beat.beat_track(y=self._y, sr=self._sr)
         bpm = float(tempo[0]) if isinstance(tempo, (np.ndarray, list)) else float(tempo)
@@ -98,18 +98,30 @@ class AudioAnalyzer:
             bpm = bpm / 2
             
         confidence = 0.9 if len(beats) > 10 else 0.4
-        return round(bpm, 1), confidence
+        
+        # Extract beatgrid times
+        beat_times = self.librosa.frames_to_time(beats, sr=self._sr).tolist()
+        
+        # Estimate phrase markers (assuming 4/4 time and 16-beat phrases)
+        phrase_markers = []
+        if len(beat_times) > 0:
+            # We assume the first beat detected is a downbeat, then every 16th beat starts a phrase
+            # For a more advanced V2, we would use PLP or spectral novelty to find true downbeats.
+            for i in range(0, len(beat_times), 16):
+                phrase_markers.append(beat_times[i])
+                
+        downbeat_confidence = confidence * 0.8  # Heuristic confidence for V1
+        
+        return round(bpm, 1), confidence, beat_times, phrase_markers, downbeat_confidence
 
-    def extract_key(self) -> str:
+    def extract_key(self) -> tuple[str, str, float]:
         """Essentia-like key extractor mapped to Camelot"""
         self._load_audio()
         chroma = self.librosa.feature.chroma_cqt(y=self._y, sr=self._sr)
         chroma_mean = np.mean(chroma, axis=1)
         estimated, corr = estimate_key(chroma_mean)
         camelot = KEY_TO_CAMELOT.get(estimated, "8A")
-        if corr < 0.4:
-            return f"{camelot} (?)"
-        return camelot
+        return estimated, camelot, float(corr)
 
     def extract_waveform(self) -> str:
         """Extracts a low-resolution amplitude envelope (200 points) for UI rendering"""
@@ -140,21 +152,24 @@ def analyze_audio(filepath: str) -> dict:
     
     try:
         analyzer = AudioAnalyzer(filepath)
-        raw_bpm, bpm_confidence = analyzer.extract_bpm()
+        raw_bpm, bpm_confidence, beatgrid, phrase_markers, downbeat_confidence = analyzer.extract_bpm_and_beats()
         
         bpm = 0.0 if bpm_confidence < 0.3 else raw_bpm
-        key = analyzer.extract_key()
+        raw_key, camelot_key, key_corr = analyzer.extract_key()
         waveform = analyzer.extract_waveform()
         
-        
-        
-        print(f"[Analyzer] Completed: {bpm} BPM (raw {raw_bpm}), Key {key}")
+        print(f"[Analyzer] Completed: {bpm} BPM (raw {raw_bpm}), Key {raw_key} ({camelot_key})")
         return {
             "bpm": bpm,
             "raw_bpm": raw_bpm,
             "bpm_confidence": bpm_confidence,
-            "key": key,
-            "waveform_data": waveform
+            "key": raw_key,
+            "key_camelot": camelot_key,
+            "key_confidence": key_corr,
+            "waveform_data": waveform,
+            "beatgrid": json.dumps(beatgrid),
+            "phrase_markers": json.dumps(phrase_markers),
+            "downbeat_confidence": downbeat_confidence
         }
     except Exception as e:
         print(f"[Analyzer] Failed to analyze {filepath}: {e}")
@@ -163,5 +178,10 @@ def analyze_audio(filepath: str) -> dict:
             "bpm": None,
             "bpm_confidence": 0.0,
             "key": None,
-            "waveform_data": "[]"
+            "key_camelot": None,
+            "key_confidence": 0.0,
+            "waveform_data": "[]",
+            "beatgrid": "[]",
+            "phrase_markers": "[]",
+            "downbeat_confidence": 0.0
         }

@@ -12,7 +12,37 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from extractor import resolve_youtube_audio
 from analyzer import analyze_audio
-from database import init_db, get_db_connection, get_track_metadata, save_track_metadata, get_all_tracks, create_playlist, get_playlists, add_item_to_playlist, update_playlist_item, delete_playlist_item, get_playlist_items, create_export_job, get_export_job, get_all_exports, log_activity_event, get_activity_events, log_audit_event, get_audit_logs
+from ai_engine import generate_mix_timeline
+from database import (
+    init_db, 
+    get_db_connection, 
+    get_track_metadata, 
+    save_track_metadata, 
+    get_all_tracks, 
+    create_playlist, 
+    get_playlists, 
+    add_item_to_playlist, 
+    update_playlist_item, 
+    delete_playlist_item, 
+    get_playlist_items, 
+    save_snapshot,
+    get_snapshots,
+    get_snapshot,
+    clear_playlist_items,
+    create_export_job, 
+    get_export_job, 
+    get_all_exports, 
+    log_activity_event, 
+    get_activity_events, 
+    log_audit_event, 
+    get_audit_logs, 
+    get_ai_sessions, 
+    get_ai_session, 
+    create_or_update_ai_session, 
+    apply_ai_session, 
+    duplicate_ai_session, 
+    rate_ai_session
+)
 from backend.stem_extractor import run_stem_extraction
 import uuid
 import time
@@ -101,7 +131,7 @@ def read_root():
         }
     }
 
-def process_audio_job(job_id: str, url: str):
+def process_audio_job(job_id: str, url: str, force_reanalyze: bool = False):
     """Background worker to download and analyze audio asynchronously."""
     try:
         jobs[job_id]["status"] = "queued"
@@ -122,21 +152,83 @@ def process_audio_job(job_id: str, url: str):
         
         # We only use cache if it was actually analyzed by the Real Audio Analysis Pipeline (Phase 10)
         # Mocked tracks will have analysis_status = 'pending' or missing
-        is_real_cache = cached_metadata and cached_metadata.get('analysis_status') == 'completed'
+        # Phase 53: Also require key_camelot to be present
+        is_real_cache = (
+            not force_reanalyze 
+            and cached_metadata 
+            and cached_metadata.get('analysis_status') == 'completed'
+            and cached_metadata.get('key_camelot') is not None
+        )
         
         if is_real_cache:
             print(f"[Backend] Cache hit for {url}. Skipping librosa analysis.")
             extraction["bpm"] = cached_metadata["bpm"]
             extraction["bpm_confidence"] = cached_metadata.get("bpm_confidence", 0.0)
             extraction["key"] = cached_metadata["key_signature"]
+            extraction["key_camelot"] = cached_metadata.get("key_camelot")
+            extraction["key_confidence"] = cached_metadata.get("key_confidence", 0.0)
             extraction["analysis_status"] = "completed"
             extraction["raw_bpm"] = cached_metadata.get("raw_bpm")
-        elif not extraction["id"].startswith("mock_"):
+        elif extraction["id"].startswith("mock_"):
+            import json
+            import random
+            duration = extraction["duration"]
+            key = random.choice(["8A", "9A", "10A", "11A", "12A", "1A", "2A", "3A", "4A", "5A", "6A", "7A"])
+            
+            if "low_conf" in extraction["id"]:
+                beatgrid = [0.5, 1.0, 1.5, 2.0]
+                phrase_markers = []
+                downbeat_confidence = 0.1
+                status = "low_confidence"
+            else:
+                beatgrid = [0.5 + i*0.5 for i in range(60)]
+                phrase_markers = [0.5, 16.5]
+                downbeat_confidence = 0.85
+                status = "completed"
+            
+            analysis = {
+                "bpm": extraction["bpm"],
+                "raw_bpm": extraction["bpm"],
+                "key": extraction["key"],
+                "key_camelot": extraction["key"],
+                "key_confidence": 0.9,
+                "waveform_data": "[]",
+                "beatgrid": json.dumps(beatgrid),
+                "phrase_markers": json.dumps(phrase_markers),
+                "downbeat_confidence": downbeat_confidence
+            }
+            extraction["bpm_confidence"] = 0.9
+            extraction["key_camelot"] = extraction["key"]
+            extraction["key_confidence"] = 0.9
+            extraction["analysis_status"] = status
+            
+            save_track_metadata(
+                youtube_url=url,
+                title=extraction["title"],
+                bpm=extraction["bpm"],
+                bpm_confidence=extraction["bpm_confidence"],
+                key_signature=extraction["key"],
+                key_camelot=extraction["key_camelot"],
+                key_confidence=extraction["key_confidence"],
+                duration=extraction["duration"],
+                genre=extraction.get("genre", "Imported"),
+                url=extraction["url"],
+                filepath=extraction["filepath"],
+                waveform_data=analysis.get("waveform_data", "[]"),
+                analysis_status=status,
+                raw_bpm=extraction.get("raw_bpm"),
+                beatgrid=analysis.get("beatgrid", "[]"),
+                phrase_markers=analysis.get("phrase_markers", "[]"),
+                downbeat_confidence=analysis.get("downbeat_confidence", 0.0)
+            )
+        else:
             analysis = analyze_audio(extraction["filepath"])
             extraction["bpm"] = analysis["bpm"]
             extraction["raw_bpm"] = analysis.get("raw_bpm")
             extraction["bpm_confidence"] = analysis.get("bpm_confidence", 0.0)
             extraction["key"] = analysis["key"]
+            extraction["key_camelot"] = analysis.get("key_camelot")
+            extraction["key_confidence"] = analysis.get("key_confidence", 0.0)
             
             # Determine analysis status
             status = "completed"
@@ -152,13 +244,18 @@ def process_audio_job(job_id: str, url: str):
                 bpm=extraction["bpm"],
                 bpm_confidence=extraction["bpm_confidence"],
                 key_signature=extraction["key"],
+                key_camelot=extraction["key_camelot"],
+                key_confidence=extraction["key_confidence"],
                 duration=extraction["duration"],
                 genre=extraction.get("genre", "Imported"),
                 url=extraction["url"],
                 filepath=extraction["filepath"],
                 waveform_data=analysis.get("waveform_data", "[]"),
                 analysis_status=status,
-                raw_bpm=extraction["raw_bpm"]
+                raw_bpm=extraction["raw_bpm"],
+                beatgrid=analysis.get("beatgrid", "[]"),
+                phrase_markers=analysis.get("phrase_markers", "[]"),
+                downbeat_confidence=analysis.get("downbeat_confidence", 0.0)
             )
             
         jobs[job_id]["status"] = "ready" if not is_real_cache else "from_cache"
@@ -177,6 +274,8 @@ def process_audio_job(job_id: str, url: str):
             "from_cache": bool(cached_metadata)
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         error_str = str(e).lower()
         if "timeout" in error_str or "timed out" in error_str:
             jobs[job_id]["status"] = "timed_out"
@@ -195,7 +294,7 @@ def import_track(req: ImportRequest, bg_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="YouTube URL cannot be empty")
         
     # Validation: basic YouTube URL regex check
-    if req.url != "mock_test_url" and not re.match(r'^(https?://)?(www\.)?(youtube\.com|youtu\.?be)/.+$', req.url):
+    if req.url != "mock_test_url" and not re.match(r'^(https?://)?(www\.)?(youtube\.com|youtu\.?be|mock\.youtube\.com)/.+$', req.url):
         raise HTTPException(status_code=400, detail="Invalid YouTube URL format")
         
     print(f"[Backend] Received async import request for URL: {req.url}")
@@ -224,6 +323,24 @@ def extract_stems(req: StemExtractRequest, bg_tasks: BackgroundTasks):
     
     return {"success": True, "status": "queued", "youtube_url": req.youtube_url}
 
+@app.get("/api/stems/status")
+def get_stem_status(youtube_url: str):
+    if not youtube_url:
+        raise HTTPException(status_code=400, detail="youtube_url parameter required")
+        
+    track = get_track_metadata(youtube_url)
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+        
+    return {
+        "success": True, 
+        "stem_status": track.get("stem_status", "NOT_GENERATED"),
+        "vocals_path": track.get("vocals_path"),
+        "drums_path": track.get("drums_path"),
+        "bass_path": track.get("bass_path"),
+        "other_path": track.get("other_path")
+    }
+
 @app.get("/api/library")
 def get_library():
     """Endpoint to retrieve historically analyzed tracks from SQLite."""
@@ -245,8 +362,10 @@ class PlaylistItemUpdate(BaseModel):
     trim_start_ms: Optional[float] = None
     trim_end_ms: Optional[float] = None
     crossfade_duration_ms: Optional[float] = None
+    fade_curve: Optional[str] = None
     gain_db: Optional[float] = None
     eq_mode: Optional[str] = None
+    phrase_snap_override: Optional[str] = None
 
 class TakeEvent(BaseModel):
     timestamp_ms: float
@@ -345,15 +464,270 @@ def api_autobuild_set(playlist_id: int, req: AutoBuildRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from backend.timing import resolve_snapped_boundaries
+
 @app.get("/api/playlists/{playlist_id}/items")
-def api_get_playlist_items(playlist_id: int):
+def api_get_playlist_items(playlist_id: int, auto_phrase_snap: bool = True):
     try:
-        return {"success": True, "items": get_playlist_items(playlist_id)}
+        items = get_playlist_items(playlist_id)
+        resolved_items = [resolve_snapped_boundaries(item, auto_phrase_snap) for item in items]
+        return {"success": True, "items": resolved_items}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def is_harmonically_compatible(key1: str, key2: str) -> bool:
+    if not key1 or not key2: return False
+    if key1 == key2: return True
+    try:
+        num1, letter1 = int(key1[:-1]), key1[-1]
+        num2, letter2 = int(key2[:-1]), key2[-1]
+        if num1 == num2 and letter1 != letter2: return True
+        if letter1 == letter2 and (abs(num1 - num2) == 1 or abs(num1 - num2) == 11): return True
+    except:
+        pass
+    return False
+
+@app.get("/api/playlists/{playlist_id}/transition-suggestions")
+def api_get_transition_suggestions(playlist_id: int):
+    try:
+        items = get_playlist_items(playlist_id)
+        suggestions = {}
+        for i in range(1, len(items)):
+            outgoing = items[i-1]
+            incoming = items[i]
+            
+            bpm_out = outgoing.get("bpm") or 120
+            bpm_in = incoming.get("bpm") or 120
+            bpm_diff = abs(bpm_out - bpm_in)
+            
+            key_out = outgoing.get("key_camelot")
+            key_in = incoming.get("key_camelot")
+            compatible_key = is_harmonically_compatible(key_out, key_in)
+            
+            # Phrase detection
+            import json
+            phrases_out = []
+            phrases_in = []
+            try:
+                if outgoing.get("phrase_markers"): phrases_out = json.loads(outgoing["phrase_markers"])
+                if incoming.get("phrase_markers"): phrases_in = json.loads(incoming["phrase_markers"])
+            except:
+                pass
+                
+            entry_window_start = phrases_in[1] if len(phrases_in) > 1 else 0
+            exit_window_start = phrases_out[-2] if len(phrases_out) > 1 else (outgoing.get("duration", 0) - 30)
+            
+            timing_note = "Timing alignment unavailable; using BPM/key only."
+            if phrases_out and phrases_in:
+                timing_note = "Aligned to outgoing phrase end and incoming phrase start."
+            
+            # Simple heuristics
+            if bpm_diff > 10:
+                suggestions[incoming["item_id"]] = {
+                    "crossfade_duration_ms": 1000,
+                    "fade_curve": "linear",
+                    "eq_mode": "soft_exit",
+                    "warning": "High BPM Contrast",
+                    "reason": f"Suggested soft_exit: {int(bpm_diff)} BPM jump may clash in a longer blend. {timing_note}",
+                    "entry_window_start": entry_window_start,
+                    "exit_window_start": exit_window_start
+                }
+            elif bpm_diff > 5:
+                suggestions[incoming["item_id"]] = {
+                    "crossfade_duration_ms": 2000,
+                    "fade_curve": "equal_power",
+                    "eq_mode": "bass_swap",
+                    "warning": "Moderate BPM Contrast",
+                    "reason": f"Suggested bass_swap: {int(bpm_diff)} BPM jump. Keep transition tight. {timing_note}",
+                    "entry_window_start": entry_window_start,
+                    "exit_window_start": exit_window_start
+                }
+            else:
+                if compatible_key:
+                    suggestions[incoming["item_id"]] = {
+                        "crossfade_duration_ms": 8000,
+                        "fade_curve": "equal_power",
+                        "eq_mode": "bass_swap",
+                        "warning": None,
+                        "reason": f"Suggested bass_swap (8s): Harmonically compatible ({key_out} -> {key_in}), allowing a long mix. {timing_note}",
+                        "entry_window_start": entry_window_start,
+                        "exit_window_start": exit_window_start
+                    }
+                else:
+                    suggestions[incoming["item_id"]] = {
+                        "crossfade_duration_ms": 4000,
+                        "fade_curve": "equal_power",
+                        "eq_mode": "vocal_protect",
+                        "warning": "Key Clash Possible",
+                        "reason": f"Suggested vocal_protect (4s): Keys may clash ({key_out} vs {key_in}). Protects vocal clarity. {timing_note}",
+                        "entry_window_start": entry_window_start,
+                        "exit_window_start": exit_window_start
+                    }
+                    
+        return {"success": True, "suggestions": suggestions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/playlists/{playlist_id}/set-analysis")
+def api_get_set_analysis(playlist_id: int):
+    try:
+        items = get_playlist_items(playlist_id)
+        if not items:
+            return {"success": True, "issues": [], "current_curve": [], "recommended_curve": [], "recommended_order": []}
+            
+        def estimate_energy(bpm):
+            if not bpm: bpm = 120
+            energy = ((bpm - 90) / 70.0) * 9.0 + 1.0
+            return max(1.0, min(10.0, energy))
+
+        current_curve = []
+        for item in items:
+            energy = round(estimate_energy(item.get("bpm")), 1)
+            current_curve.append({"item_id": item["item_id"], "title": item["title"], "energy": energy})
+
+        issues = []
+        # Abrupt drops
+        for i in range(1, len(current_curve)):
+            drop = current_curve[i-1]["energy"] - current_curve[i]["energy"]
+            if drop >= 3.0:
+                issues.append({
+                    "type": "abrupt_drop",
+                    "reason": f"Track {i+1} ('{current_curve[i]['title']}') drops energy from {current_curve[i-1]['energy']} to {current_curve[i]['energy']} too abruptly."
+                })
+        
+        # Harmonic Clashes
+        for i in range(1, len(items)):
+            key_out = items[i-1].get("key_camelot")
+            key_in = items[i].get("key_camelot")
+            if key_out and key_in and not is_harmonically_compatible(key_out, key_in):
+                issues.append({
+                    "type": "harmonic_clash",
+                    "reason": f"Track {i} ('{items[i-1].get('title')}') and Track {i+1} ('{items[i].get('title')}') have incompatible keys ({key_out} -> {key_in})."
+                })
+
+        # Early Peak
+        if len(current_curve) > 3:
+            max_energy = max([c["energy"] for c in current_curve])
+            max_idx = [i for i, c in enumerate(current_curve) if c["energy"] == max_energy][0]
+            if max_idx < len(current_curve) * 0.25:
+                issues.append({
+                    "type": "early_peak",
+                    "reason": f"Highest-energy track ('{current_curve[max_idx]['title']}') appears too early in the set."
+                })
+                
+        # Repeated Plateaus
+        plateau_count = 1
+        for i in range(1, len(current_curve)):
+            if abs(current_curve[i]["energy"] - current_curve[i-1]["energy"]) < 0.5:
+                plateau_count += 1
+            else:
+                plateau_count = 1
+            
+            if plateau_count == 3:
+                issues.append({
+                    "type": "repeated_plateau",
+                    "reason": f"Tracks {i-1}, {i}, and {i+1} form a static energy plateau that might stall momentum."
+                })
+                # only report once to avoid spamming
+                break
+        
+        # Recommended order (sort by energy ascending for a steady build)
+        sorted_items = sorted(items, key=lambda x: estimate_energy(x.get("bpm")))
+        recommended_order = [item["item_id"] for item in sorted_items]
+        
+        recommended_curve = []
+        for item in sorted_items:
+            energy = round(estimate_energy(item.get("bpm")), 1)
+            recommended_curve.append({"item_id": item["item_id"], "title": item["title"], "energy": energy})
+
+        return {
+            "success": True, 
+            "issues": issues, 
+            "current_curve": current_curve, 
+            "recommended_curve": recommended_curve, 
+            "recommended_order": recommended_order
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ImportedPlaylistItem(BaseModel):
+    youtube_url: str
+    position_index: int
+    trim_start_ms: Optional[float] = None
+    trim_end_ms: Optional[float] = None
+    crossfade_duration_ms: Optional[float] = None
+    gain_db: Optional[float] = None
+    eq_mode: Optional[str] = None
+    transition_preset: Optional[str] = None
+    is_snapped: Optional[bool] = None
+    phrase_snap_override: Optional[str] = None
+    fade_curve: Optional[str] = None
+    transition_type: Optional[str] = None
+    duck_amount_db: Optional[float] = None
+
+class ImportedProjectData(BaseModel):
+    schema_version: str
+    playlist_name: Optional[str] = None
+    items: List[ImportedPlaylistItem]
+    takes: Optional[List[Dict[str, Any]]] = None
+
 class ProjectImportRequest(BaseModel):
-    project_data: Dict[str, Any]
+    project_data: ImportedProjectData
+
+class SnapshotRequest(BaseModel):
+    name: str
+    source_type: str = 'manual'
+    reason: str = None
+
+@app.post("/api/playlists/{playlist_id}/snapshots")
+def api_create_snapshot(playlist_id: int, req: SnapshotRequest):
+    try:
+        items = get_playlist_items(playlist_id)
+        data = json.dumps(items)
+        snapshot_id = save_snapshot(playlist_id, req.name, data, req.source_type, req.reason)
+        return {"success": True, "snapshot_id": snapshot_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/playlists/{playlist_id}/snapshots")
+def api_get_snapshots(playlist_id: int):
+    try:
+        snapshots = get_snapshots(playlist_id)
+        return {"success": True, "snapshots": snapshots}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/playlists/{playlist_id}/snapshots/{snapshot_id}/restore")
+def api_restore_snapshot(playlist_id: int, snapshot_id: int):
+    try:
+        snapshot = get_snapshot(snapshot_id)
+        if not snapshot or snapshot["playlist_id"] != playlist_id:
+            raise HTTPException(status_code=404, detail="Snapshot not found")
+        
+        items = json.loads(snapshot["data"])
+        
+        # Clear existing items
+        clear_playlist_items(playlist_id)
+        
+        # Restore items
+        for i, item in enumerate(items):
+            add_item_to_playlist(playlist_id, item["youtube_url"], i)
+            # update transition settings
+            update_playlist_item(item["item_id"], {
+                "trim_start_ms": item.get("trim_start_ms", 0),
+                "trim_end_ms": item.get("trim_end_ms", 0),
+                "crossfade_duration_ms": item.get("crossfade_duration_ms", 2000),
+                "fade_curve": item.get("fade_curve", "linear"),
+                "eq_mode": item.get("eq_mode", "none"),
+                "duck_amount_db": item.get("duck_amount_db", 0.0),
+                "transition_type": item.get("transition_type", "crossfade"),
+                "is_snapped": item.get("is_snapped", False),
+                "sync_mode": item.get("sync_mode", "auto")
+            })
+            
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/projects/export/{playlist_id}")
 def api_export_project(playlist_id: int):
@@ -392,38 +766,309 @@ def api_export_project(playlist_id: int):
 def api_import_project(req: ProjectImportRequest):
     try:
         data = req.project_data
-        if data.get("schema_version") != "1.0":
-            # Just a warning or info, we can attempt to parse anyway
-            pass
+        if data.schema_version != "1.0":
+            raise HTTPException(status_code=400, detail="Unsupported schema_version")
             
-        # 1. Create new playlist
-        new_name = f"{data.get('playlist_name', 'Imported Session')} (Imported)"
-        new_pid = create_playlist(new_name)
-        
-        # 2. Add items
-        items = data.get("items", [])
-        for item in items:
-            item_id = add_item_to_playlist(new_pid, item["youtube_url"], item["position_index"])
-            # Update DSP metadata
-            updates = {
-                "trim_start_ms": item.get("trim_start_ms"),
-                "trim_end_ms": item.get("trim_end_ms"),
-                "crossfade_duration_ms": item.get("crossfade_duration_ms"),
-                "gain_db": item.get("gain_db"),
-                "eq_mode": item.get("eq_mode")
-            }
-            # Remove Nones
-            updates = {k: v for k, v in updates.items() if v is not None}
-            if updates:
-                update_playlist_item(item_id, updates)
-                
-        # 3. Add takes
-        takes = data.get("takes", [])
-        if takes:
-            takes_db[new_pid] = takes
+        # Semantic validation pass
+        seen_positions = set()
+        for item in data.items:
+            if item.position_index in seen_positions:
+                raise HTTPException(status_code=400, detail=f"Duplicate position_index: {item.position_index}")
+            seen_positions.add(item.position_index)
             
-        return {"success": True, "new_playlist_id": new_pid}
+            if item.trim_start_ms is not None and item.trim_start_ms < 0:
+                raise HTTPException(status_code=400, detail="trim_start_ms cannot be negative")
+            if item.trim_end_ms is not None and item.trim_end_ms < 0:
+                raise HTTPException(status_code=400, detail="trim_end_ms cannot be negative")
+            if item.trim_start_ms is not None and item.trim_end_ms is not None:
+                if item.trim_end_ms < item.trim_start_ms:
+                    raise HTTPException(status_code=400, detail="trim_end_ms cannot be less than trim_start_ms")
+
+        # Database Transaction
+        conn = get_db_connection()
+        try:
+            # 1. Create new playlist
+            new_name = f"{data.playlist_name or 'Imported Session'} (Imported)"
+            new_pid = create_playlist(new_name, conn=conn)
+            
+            # 2. Add items
+            for item in data.items:
+                item_id = add_item_to_playlist(new_pid, item.youtube_url, item.position_index, conn=conn)
+                # Update DSP metadata
+                updates = {
+                    "trim_start_ms": item.trim_start_ms,
+                    "trim_end_ms": item.trim_end_ms,
+                    "crossfade_duration_ms": item.crossfade_duration_ms,
+                    "gain_db": item.gain_db,
+                    "eq_mode": item.eq_mode,
+                    "transition_preset": item.transition_preset,
+                    "is_snapped": item.is_snapped,
+                    "phrase_snap_override": item.phrase_snap_override,
+                    "fade_curve": item.fade_curve,
+                    "transition_type": item.transition_type,
+                    "duck_amount_db": item.duck_amount_db
+                }
+                # Remove Nones
+                updates = {k: v for k, v in updates.items() if v is not None}
+                if updates:
+                    update_playlist_item(item_id, updates, conn=conn)
+                    
+            # 3. Add takes
+            if data.takes:
+                takes_db[new_pid] = data.takes
+
+            conn.commit()
+            return {"success": True, "new_playlist_id": new_pid}
+        except Exception as e:
+            conn.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+        finally:
+            conn.close()
+
+    except HTTPException:
+        raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/playlists/import")
+@app.post("/api/tracks/recover/auto")
+def api_recover_track_auto(req: ImportRequest, bg_tasks: BackgroundTasks):
+    """Auto-recover a ghost track by redownloading it from YouTube."""
+    if not req.url:
+        raise HTTPException(status_code=400, detail="YouTube URL required")
+        
+    print(f"[Backend] Auto-recovering track: {req.url}")
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "queued", "progress": 0.0, "title": f"Recovering {req.url}"}
+    
+    # Mark as auto recovered in DB
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tracks SET relink_method = 'auto', relink_warning = NULL WHERE youtube_url = ?", (req.url,))
+    conn.commit()
+    conn.close()
+    
+    bg_tasks.add_task(process_audio_job, job_id, req.url, True)
+    
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "queued"
+    }
+
+@app.post("/api/tracks/recover/manual")
+async def api_recover_track_manual(request: Request, bg_tasks: BackgroundTasks):
+    """Manual recover a ghost track via file upload (binary body + headers)."""
+    youtube_url = request.headers.get("x-youtube-url")
+    filename = request.headers.get("x-filename", "recovered_audio.wav")
+    if not youtube_url:
+        raise HTTPException(status_code=400, detail="x-youtube-url header required")
+        
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty request body")
+        
+    print(f"[Backend] Manual-recovering track: {youtube_url} with file {filename}")
+    
+    # Save the file to downloads
+    safe_filename = "".join(c for c in filename if c.isalnum() or c in " ._-")
+    file_id = str(uuid.uuid4())[:8]
+    filepath = os.path.join(DOWNLOADS_DIR, f"manual_{file_id}_{safe_filename}")
+    
+    with open(filepath, "wb") as f:
+        f.write(body)
+        
+    # We will process it synchronously or asynchronously? Async is better so it doesn't block.
+    # We can write a quick custom job for manual file analysis.
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "queued", "progress": 0.0, "title": f"Analyzing {filename}"}
+    
+    def process_manual_file(j_id: str, y_url: str, f_path: str, orig_filename: str):
+        try:
+            jobs[j_id]["status"] = "analyzing"
+            jobs[j_id]["progress"] = 50.0
+            
+            # Fetch original duration
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT duration FROM tracks WHERE youtube_url = ?", (y_url,))
+            row = cursor.fetchone()
+            orig_duration = row["duration"] if row else 0.0
+            
+            # Run librosa analysis
+            analysis = analyze_audio(f_path)
+            new_duration = analysis.get("duration", 0.0)
+            
+            warning = None
+            if orig_duration > 0 and abs(new_duration - orig_duration) > 5.0:
+                warning = f"Duration mismatch: Expected {orig_duration:.1f}s, got {new_duration:.1f}s"
+                
+            status = "completed"
+            if analysis.get("bpm_confidence", 0.0) < 0.3 or not analysis.get("key"):
+                status = "low_confidence"
+                
+            cursor.execute("""
+                UPDATE tracks SET 
+                    filepath = ?, 
+                    waveform_data = ?, 
+                    bpm = ?, 
+                    bpm_confidence = ?, 
+                    key_signature = ?, 
+                    key_camelot = ?,
+                    key_confidence = ?,
+                    duration = ?, 
+                    analysis_status = ?, 
+                    raw_bpm = ?,
+                    relink_method = 'manual',
+                    relink_warning = ?
+                WHERE youtube_url = ?
+            """, (
+                f_path,
+                analysis.get("waveform_data", "[]"),
+                analysis.get("bpm"),
+                analysis.get("bpm_confidence", 0.0),
+                analysis.get("key"),
+                analysis.get("key_camelot"),
+                analysis.get("key_confidence", 0.0),
+                new_duration if new_duration > 0 else orig_duration,
+                status,
+                analysis.get("raw_bpm"),
+                warning,
+                y_url
+            ))
+            conn.commit()
+            conn.close()
+            
+            jobs[j_id]["status"] = "ready"
+            jobs[j_id]["progress"] = 100.0
+            jobs[j_id]["track"] = {
+                "id": y_url,
+                "relink_warning": warning
+            }
+        except Exception as e:
+            print(f"[Backend Error] Manual file processing failed: {e}")
+            jobs[j_id]["status"] = "failed"
+            jobs[j_id]["error"] = str(e)
+            
+    bg_tasks.add_task(process_manual_file, job_id, youtube_url, filepath, filename)
+    
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "queued"
+    }
+
+async def api_import_playlist(request: Request, bg_tasks: BackgroundTasks):
+    try:
+        content_type = request.headers.get("content-type", "")
+        body = await request.body()
+        
+        manifest_data = None
+        if "application/zip" in content_type:
+            import zipfile
+            import io
+            with zipfile.ZipFile(io.BytesIO(body), "r") as z:
+                if "manifest.json" in z.namelist():
+                    manifest_data = json.loads(z.read("manifest.json").decode("utf-8"))
+        elif "application/json" in content_type:
+            manifest_data = json.loads(body.decode("utf-8"))
+            
+        if not manifest_data:
+            raise HTTPException(status_code=400, detail="Invalid package format. No manifest.json found.")
+            
+        items = manifest_data.get("items", [])
+        transitions_applied = manifest_data.get("transitions_applied", [])
+        original_name = manifest_data.get("playlist_name") or manifest_data.get("export_name") or "Imported Project"
+        
+        # Create new playlist
+        new_pid = create_playlist(f"{original_name} (Imported)")
+        
+        warnings = []
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        for idx, item in enumerate(items):
+            url = item.get("youtube_url")
+            
+            # Check if track exists
+            cursor.execute("SELECT * FROM tracks WHERE youtube_url = ?", (url,))
+            row = cursor.fetchone()
+            
+            is_missing = False
+            if not row or not row["filepath"] or not os.path.exists(row["filepath"]):
+                is_missing = True
+                warnings.append({
+                    "type": "media_missing", 
+                    "title": item.get("title", url),
+                    "youtube_url": url
+                })
+                # Create ghost track if not in DB at all
+                if not row:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO tracks (youtube_url, title, bpm, key_signature, duration, genre, url, filepath, analysis_version, waveform_data, analysis_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        url, 
+                        item.get("title", "Unknown Track"),
+                        item.get("bpm", 120.0),
+                        item.get("key_signature", ""),
+                        item.get("duration", 0.0),
+                        item.get("genre", ""),
+                        url,
+                        "", # missing filepath
+                        ANALYSIS_VERSION,
+                        "[]",
+                        "completed"
+                    ))
+            elif row and not row["key_camelot"]:
+                # Phase 53: Automatically trigger background analysis for imported tracks missing Camelot key
+                job_id = str(uuid.uuid4())
+                jobs[job_id] = {"status": "queued", "progress": 0.0, "title": f"Upgrading metadata for {url}"}
+                bg_tasks.add_task(process_audio_job, job_id, url, False)
+            
+            # Insert playlist item
+            cursor.execute("""
+                INSERT INTO playlist_items (playlist_id, youtube_url, position_index)
+                VALUES (?, ?, ?)
+            """, (new_pid, url, idx))
+            new_item_id = cursor.lastrowid
+            
+            # Update item with restored trim & basic metadata
+            updates = {
+                "trim_start_ms": item.get("trim_start_ms", 0),
+                "trim_end_ms": item.get("trim_end_ms", 0),
+                "is_snapped": item.get("is_snapped", False),
+                "transition_preset": item.get("transition_preset", "manual")
+            }
+            
+            # Map transition data if available
+            if idx < len(transitions_applied):
+                t = transitions_applied[idx]
+                updates["crossfade_duration_ms"] = t.get("duration_ms", 0)
+                updates["fade_curve"] = t.get("curve", "linear")
+                updates["eq_mode"] = t.get("eq_mode", "none")
+                updates["duck_amount_db"] = t.get("duck_db", 0)
+                if "sync_status" in t:
+                    updates["sync_mode"] = "auto"
+                else:
+                    updates["sync_mode"] = "none"
+                    
+            update_playlist_item(new_item_id, updates)
+            
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True, 
+            "playlist_id": new_pid, 
+            "warnings": warnings,
+            "message": f"Imported successfully with {len(warnings)} missing assets." if warnings else "Imported successfully."
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 class CloudProjectCreate(BaseModel):
@@ -920,6 +1565,18 @@ def api_update_playlist_item(item_id: int, req: PlaylistItemUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class ReorderRequest(BaseModel):
+    item_ids: List[int]
+
+@app.post("/api/playlists/{playlist_id}/items/reorder")
+def api_reorder_playlist_items(playlist_id: int, req: ReorderRequest):
+    try:
+        for idx, item_id in enumerate(req.item_ids):
+            update_playlist_item(item_id, {"position_index": idx})
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/playlist-items/{item_id}")
 def api_delete_playlist_item(item_id: int):
     try:
@@ -939,13 +1596,23 @@ def get_job_status(job_id: str):
 class ExportRequest(BaseModel):
     playlist_id: int
     master_bus_mode: Optional[str] = "Balanced"
+    export_name: Optional[str] = "Export"
+    auto_phrase_snap: Optional[bool] = True
 
 @app.post("/api/export")
 def create_export(req: ExportRequest, bg_tasks: BackgroundTasks):
+    items = get_playlist_items(req.playlist_id)
+    if not items:
+        raise HTTPException(status_code=400, detail="Cannot export an empty playlist")
+    
+    has_valid_url = any(item.get('youtube_url') for item in items)
+    if not has_valid_url:
+        raise HTTPException(status_code=400, detail="Playlist contains no valid or resolvable tracks to export")
+        
     job_id = f"{uuid.uuid4()}"
-    settings = json.dumps({"source": "playlist", "master_bus_mode": req.master_bus_mode})
+    settings = json.dumps({"source": "playlist", "master_bus_mode": req.master_bus_mode, "export_name": req.export_name, "auto_phrase_snap": req.auto_phrase_snap})
     create_export_job(job_id, req.playlist_id, settings)
-    bg_tasks.add_task(process_export_job, job_id, req.playlist_id, "Playlist", req.master_bus_mode)
+    bg_tasks.add_task(process_export_job, job_id, req.playlist_id, "Playlist", req.master_bus_mode, req.export_name, req.auto_phrase_snap)
     
     return {"success": True, "job_id": job_id}
 @app.get("/api/export")
@@ -1654,6 +2321,108 @@ def api_get_project_health(project_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class AIGenerateRequest(BaseModel):
+    prompt: str
+    tracks: List[Dict[str, Any]]
+
+@app.post("/api/ai/generate")
+def api_ai_generate(req: AIGenerateRequest):
+    try:
+        result = generate_mix_timeline(req.prompt, req.tracks)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
+# ==========================================
+# Phase 35: AI Sessions
+# ==========================================
+class AISessionCreate(BaseModel):
+    session_id: Optional[int] = None
+    prompt: str
+    input_tracks: list
+    variations: list
+    selected_variation_index: int = 0
+
+class AIApplyRequest(BaseModel):
+    project_id: Optional[int] = None
+    version_id: Optional[int] = None
+
+@app.get("/api/ai/sessions")
+def api_get_ai_sessions(limit: int = 50):
+    try:
+        sessions = get_ai_sessions(limit)
+        return {"success": True, "sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/sessions/compare")
+def api_compare_ai_sessions(id1: int, id2: int):
+    try:
+        session1 = get_ai_session(id1)
+        session2 = get_ai_session(id2)
+        if not session1 or not session2:
+            raise HTTPException(status_code=404, detail="One or both sessions not found")
+            
+        # Basic diff computed on backend
+        diff = {
+            "prompt_changed": session1["prompt"] != session2["prompt"],
+            "selected_variation_changed": session1["selected_variation_index"] != session2["selected_variation_index"]
+        }
+        
+        return {"success": True, "session1": session1, "session2": session2, "diff": diff}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/sessions/{session_id}")
+def api_get_ai_session(session_id: int):
+    try:
+        session = get_ai_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"success": True, "session": session}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ai/sessions")
+def api_save_ai_session(req: AISessionCreate):
+    try:
+        new_id = create_or_update_ai_session(req.session_id, req.prompt, req.input_tracks, req.variations, req.selected_variation_index)
+        if not new_id:
+            raise Exception("Failed to save AI session")
+        return {"success": True, "session_id": new_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ai/sessions/{session_id}/duplicate")
+def api_duplicate_ai_session(session_id: int):
+    try:
+        new_id = duplicate_ai_session(session_id)
+        if not new_id:
+            raise Exception("Failed to duplicate AI session")
+        return {"success": True, "session_id": new_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/ai/sessions/{session_id}/apply")
+def api_apply_ai_session(session_id: int, req: AIApplyRequest):
+    try:
+        success = apply_ai_session(session_id, req.project_id, req.version_id)
+        return {"success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AIRateRequest(BaseModel):
+    rating: str
+
+@app.put("/api/ai/sessions/{session_id}/rate")
+def api_rate_ai_session(session_id: int, req: AIRateRequest):
+    try:
+        success = rate_ai_session(session_id, req.rating)
+        return {"success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

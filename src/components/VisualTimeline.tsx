@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, ZoomIn, ZoomOut } from 'lucide-react';
+import Waveform from './Waveform';
 
 interface VisualTimelineProps {
   items: any[];
@@ -9,37 +10,6 @@ interface VisualTimelineProps {
   positionedBlocks: any[];
   globalTimeMs: number;
 }
-
-const Waveform = ({ dataStr, durationMs, trimStart, trimEnd }: { dataStr: string, durationMs: number, trimStart: number, trimEnd: number }) => {
-  if (!dataStr || dataStr === "[]") return null;
-  let points: number[] = [];
-  try { points = JSON.parse(dataStr); } catch { return null; }
-  if (!points.length || !durationMs) return null;
-
-  const startRatio = Math.max(0, trimStart / durationMs);
-  const endRatio = Math.min(1, trimEnd / durationMs);
-  const startIndex = Math.floor(startRatio * points.length);
-  const endIndex = Math.ceil(endRatio * points.length);
-  const visiblePoints = points.slice(startIndex, endIndex);
-  if (!visiblePoints.length) return null;
-
-  const width = 1000;
-  const height = 100;
-  const stepX = width / visiblePoints.length;
-  const path = visiblePoints.map((val, i) => {
-    const x = i * stepX;
-    const y = (1 - val) * height;
-    return `${x},${y}`;
-  }).join(' ') + ` ${width},${height} 0,${height}`;
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40 mix-blend-screen pointer-events-none" style={{ top: '24px', bottom: '24px' }}>
-      <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${width} ${height}`}>
-        <polygon points={path} fill="currentColor" className="text-neon-cyan" />
-      </svg>
-    </div>
-  );
-};
 
 export default function VisualTimeline({ items, onUpdateItem, selectedItemId, onSelectItem, positionedBlocks, globalTimeMs }: VisualTimelineProps) {
   const [snapToBeat, setSnapToBeat] = useState(false);

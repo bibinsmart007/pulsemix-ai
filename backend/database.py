@@ -31,10 +31,61 @@ def init_db():
             drums_path TEXT,
             bass_path TEXT,
             other_path TEXT,
+            relink_method TEXT,
+            relink_warning TEXT,
+            bpm_confidence REAL,
+            key_confidence REAL,
+            key_camelot TEXT,
+            beatgrid TEXT,
+            phrase_markers TEXT,
+            downbeat_confidence REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
+    # Try to add relink columns to existing table
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN relink_method TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN relink_warning TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    # Try to add phase 53 analysis columns
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN bpm_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN key_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN key_camelot TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    # Try to add phase 54 analysis columns
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN beatgrid TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN phrase_markers TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN downbeat_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS playlists (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +93,6 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS playlist_tracks (
             playlist_id INTEGER,
@@ -65,6 +115,7 @@ def init_db():
             trim_end_ms REAL DEFAULT 0,
             crossfade_duration_ms REAL DEFAULT 2000,
             is_snapped INTEGER DEFAULT 0,
+            phrase_snap_override TEXT,
             fade_curve TEXT DEFAULT 'linear',
             transition_type TEXT DEFAULT 'crossfade',
             duck_amount_db REAL DEFAULT 0.0,
@@ -73,6 +124,25 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (playlist_id) REFERENCES playlists (id) ON DELETE CASCADE,
             FOREIGN KEY (youtube_url) REFERENCES tracks (youtube_url) ON DELETE CASCADE
+        )
+    """)
+    
+    # Phase 55 migration
+    try:
+        cursor.execute("ALTER TABLE playlist_items ADD COLUMN phrase_snap_override TEXT")
+    except sqlite3.OperationalError:
+        pass
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS playlist_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            playlist_id INTEGER,
+            name TEXT NOT NULL,
+            data TEXT NOT NULL,
+            source_type TEXT DEFAULT 'manual',
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (playlist_id) REFERENCES playlists (id) ON DELETE CASCADE
         )
     """)
     
@@ -365,6 +435,39 @@ def init_db():
         )
     """)
 
+    # Phase 35 Migrations
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            parent_session_id INTEGER,
+            name TEXT,
+            summary TEXT,
+            prompt TEXT,
+            input_tracks_json TEXT,
+            variations_json TEXT,
+            selected_variation_index INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'draft',
+            rating TEXT DEFAULT 'unrated',
+            applied_at REAL,
+            applied_version_id INTEGER,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES cloud_projects(id) ON DELETE SET NULL,
+            FOREIGN KEY(applied_version_id) REFERENCES cloud_project_versions(id) ON DELETE SET NULL,
+            FOREIGN KEY(parent_session_id) REFERENCES ai_sessions(id) ON DELETE SET NULL
+        )
+    """)
+    try:
+        cursor.execute("ALTER TABLE ai_sessions ADD COLUMN parent_session_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE ai_sessions ADD COLUMN rating TEXT DEFAULT 'unrated'")
+    except sqlite3.OperationalError:
+        pass
+
+
     # Inject a known row for the cache verification snapshot
     cursor.execute("""
         INSERT OR IGNORE INTO tracks (youtube_url, title, bpm, bpm_confidence, key_signature, duration, genre, url, filepath, analysis_version, waveform_data)
@@ -420,13 +523,13 @@ def get_track_metadata(youtube_url: str) -> Optional[Dict[str, Any]]:
         return dict(row)
     return None
 
-def save_track_metadata(youtube_url: str, title: str, bpm: float, bpm_confidence: float, key_signature: str, duration: float, genre: str, url: str, filepath: str, waveform_data: str = "[]", analysis_status: str = 'completed', raw_bpm: float = None):
+def save_track_metadata(youtube_url: str, title: str, bpm: float, bpm_confidence: float, key_signature: str, key_camelot: str, key_confidence: float, duration: float, genre: str, url: str, filepath: str, waveform_data: str = "[]", analysis_status: str = 'completed', raw_bpm: float = None, beatgrid: str = "[]", phrase_markers: str = "[]", downbeat_confidence: float = 0.0):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO tracks (youtube_url, title, bpm, bpm_confidence, key_signature, duration, genre, url, filepath, analysis_version, waveform_data, analysis_status, raw_bpm)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (youtube_url, title, bpm, bpm_confidence, key_signature, duration, genre, url, filepath, ANALYSIS_VERSION, waveform_data, analysis_status, raw_bpm))
+        INSERT OR REPLACE INTO tracks (youtube_url, title, bpm, bpm_confidence, key_signature, key_camelot, key_confidence, duration, genre, url, filepath, analysis_version, waveform_data, analysis_status, raw_bpm, beatgrid, phrase_markers, downbeat_confidence)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (youtube_url, title, bpm, bpm_confidence, key_signature, key_camelot, key_confidence, duration, genre, url, filepath, ANALYSIS_VERSION, waveform_data, analysis_status, raw_bpm, beatgrid, phrase_markers, downbeat_confidence))
     conn.commit()
     conn.close()
 
@@ -439,13 +542,17 @@ def get_all_tracks() -> list[Dict[str, Any]]:
     conn.close()
     return [dict(row) for row in rows]
 
-def create_playlist(name: str) -> int:
-    conn = sqlite3.connect(DB_PATH)
+def create_playlist(name: str, conn: Optional[sqlite3.Connection] = None) -> int:
+    close_conn = False
+    if conn is None:
+        conn = sqlite3.connect(DB_PATH)
+        close_conn = True
     cursor = conn.cursor()
     cursor.execute("INSERT INTO playlists (name) VALUES (?)", (name,))
     playlist_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    if close_conn:
+        conn.commit()
+        conn.close()
     return playlist_id
 
 def get_playlists() -> list[Dict[str, Any]]:
@@ -457,16 +564,73 @@ def get_playlists() -> list[Dict[str, Any]]:
     conn.close()
     return [dict(row) for row in rows]
 
-def add_item_to_playlist(playlist_id: int, youtube_url: str, position_index: int):
-    conn = sqlite3.connect(DB_PATH)
+def save_snapshot(playlist_id: int, name: str, data: str, source_type: str = 'manual', reason: str = None) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO playlist_snapshots (playlist_id, name, data, source_type, reason) VALUES (?, ?, ?, ?, ?)",
+        (playlist_id, name, data, source_type, reason)
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+def get_snapshots(playlist_id: int):
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT id, playlist_id, name, data, source_type, reason, created_at FROM playlist_snapshots WHERE playlist_id = ? ORDER BY created_at DESC",
+        (playlist_id,)
+    ).fetchall()
+    snapshots = []
+    for row in rows:
+        snapshots.append({
+            "id": row[0],
+            "playlist_id": row[1],
+            "name": row[2],
+            "data": row[3],
+            "source_type": row[4],
+            "reason": row[5],
+            "created_at": row[6]
+        })
+    return snapshots
+
+def get_snapshot(snapshot_id: int):
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT id, playlist_id, name, data, source_type, reason, created_at FROM playlist_snapshots WHERE id = ?",
+        (snapshot_id,)
+    ).fetchone()
+    if not row: return None
+    return {
+        "id": row[0],
+        "playlist_id": row[1],
+        "name": row[2],
+        "data": row[3],
+        "source_type": row[4],
+        "reason": row[5],
+        "created_at": row[6]
+    }
+
+def clear_playlist_items(playlist_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM playlist_items WHERE playlist_id = ?", (playlist_id,))
+    conn.commit()
+    conn.close()
+
+def add_item_to_playlist(playlist_id: int, youtube_url: str, position_index: int, conn: Optional[sqlite3.Connection] = None):
+    close_conn = False
+    if conn is None:
+        conn = sqlite3.connect(DB_PATH)
+        close_conn = True
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO playlist_items (playlist_id, youtube_url, position_index)
         VALUES (?, ?, ?)
     """, (playlist_id, youtube_url, position_index))
     item_id = cursor.lastrowid
-    conn.commit()
-    conn.commit()
+    if close_conn:
+        conn.commit()
+        conn.close()
     return item_id
 
 def log_activity_event(project_id: int, event_type: str, actor: str = "System", version_id: Optional[int] = None, target_id: Optional[int] = None, metadata: Optional[Dict[str, Any]] = None, importance: str = "normal"):
@@ -522,10 +686,13 @@ def get_activity_events(project_id, limit=50):
         print(f"Error fetching activity events: {e}")
         return []
 
-def update_playlist_item(item_id: int, updates: dict):
-    conn = sqlite3.connect(DB_PATH)
+def update_playlist_item(item_id: int, updates: dict, conn: Optional[sqlite3.Connection] = None):
+    close_conn = False
+    if conn is None:
+        conn = sqlite3.connect(DB_PATH)
+        close_conn = True
     cursor = conn.cursor()
-    allowed_keys = ['position_index', 'trim_start_ms', 'trim_end_ms', 'crossfade_duration_ms', 'gain_db', 'transition_preset', 'is_snapped', 'fade_curve', 'transition_type', 'duck_amount_db', 'eq_mode', 'sync_mode']
+    allowed_keys = ['position_index', 'trim_start_ms', 'trim_end_ms', 'crossfade_duration_ms', 'gain_db', 'transition_preset', 'is_snapped', 'fade_curve', 'transition_type', 'duck_amount_db', 'eq_mode', 'sync_mode', 'phrase_snap_override']
     
     set_clauses = []
     values = []
@@ -537,8 +704,10 @@ def update_playlist_item(item_id: int, updates: dict):
     if set_clauses:
         values.append(item_id)
         cursor.execute(f"UPDATE playlist_items SET {', '.join(set_clauses)} WHERE id = ?", tuple(values))
-        conn.commit()
-    conn.close()
+        if close_conn:
+            conn.commit()
+    if close_conn:
+        conn.close()
 
 def delete_playlist_item(item_id: int):
     conn = sqlite3.connect(DB_PATH)
@@ -552,7 +721,7 @@ def get_playlist_items(playlist_id: int) -> list[Dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.*, pi.id as item_id, pi.position_index, pi.trim_start_ms, pi.trim_end_ms, pi.crossfade_duration_ms, pi.gain_db, pi.transition_preset, pi.is_snapped, pi.fade_curve, pi.transition_type, pi.duck_amount_db, pi.eq_mode, pi.sync_mode
+        SELECT t.*, pi.id as item_id, pi.position_index, pi.trim_start_ms, pi.trim_end_ms, pi.crossfade_duration_ms, pi.gain_db, pi.transition_preset, pi.is_snapped, pi.phrase_snap_override, pi.fade_curve, pi.transition_type, pi.duck_amount_db, pi.eq_mode, pi.sync_mode
         FROM tracks t
         JOIN playlist_items pi ON t.youtube_url = pi.youtube_url
         WHERE pi.playlist_id = ?
@@ -650,3 +819,139 @@ def get_audit_logs(project_id, limit=100):
     except Exception as e:
         print(f"Error fetching audit logs: {e}")
         return []
+
+# Phase 35: AI Session Helpers
+import time
+import json
+
+def get_ai_sessions(limit=50):
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        sessions = conn.execute("""
+            SELECT id, name, summary, prompt, status, rating, applied_at, created_at, updated_at, parent_session_id 
+            FROM ai_sessions 
+            ORDER BY updated_at DESC 
+            LIMIT ?
+        """, (limit,)).fetchall()
+        conn.close()
+        return [dict(s) for s in sessions]
+    except Exception as e:
+        print(f"Error fetching AI sessions: {e}")
+        return []
+
+def get_ai_session(session_id: int) -> Optional[Dict[str, Any]]:
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        session = conn.execute("SELECT * FROM ai_sessions WHERE id = ?", (session_id,)).fetchone()
+        conn.close()
+        if session:
+            s = dict(session)
+            # Parse JSON fields
+            s["input_tracks"] = json.loads(s.get("input_tracks_json", "[]"))
+            s["variations"] = json.loads(s.get("variations_json", "[]"))
+            return s
+        return None
+    except Exception as e:
+        print(f"Error fetching AI session {session_id}: {e}")
+        return None
+
+def create_or_update_ai_session(session_id: Optional[int], prompt: str, input_tracks: list, variations: list, selected_index: int = 0):
+    try:
+        now = time.time()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        name = "Draft Mix"
+        summary = prompt[:30] + "..." if len(prompt) > 30 else prompt
+        
+        if session_id:
+            cursor.execute("""
+                UPDATE ai_sessions 
+                SET prompt = ?, input_tracks_json = ?, variations_json = ?, selected_variation_index = ?, updated_at = ?, name = ?, summary = ?
+                WHERE id = ? AND status = 'draft'
+            """, (prompt, json.dumps(input_tracks), json.dumps(variations), selected_index, now, name, summary, session_id))
+            
+            # If no rows updated (e.g. status was not draft or wrong ID), create a new one
+            if cursor.rowcount == 0:
+                cursor.execute("""
+                    INSERT INTO ai_sessions (name, summary, prompt, input_tracks_json, variations_json, selected_variation_index, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (name, summary, prompt, json.dumps(input_tracks), json.dumps(variations), selected_index, now, now))
+                session_id = cursor.lastrowid
+        else:
+            cursor.execute("""
+                INSERT INTO ai_sessions (name, summary, prompt, input_tracks_json, variations_json, selected_variation_index, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, summary, prompt, json.dumps(input_tracks), json.dumps(variations), selected_index, now, now))
+            session_id = cursor.lastrowid
+            
+        conn.commit()
+        conn.close()
+        return session_id
+    except Exception as e:
+        print(f"Error saving AI session: {e}")
+        return None
+
+def apply_ai_session(session_id: int, project_id: Optional[int] = None, version_id: Optional[int] = None):
+    try:
+        now = time.time()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ai_sessions 
+            SET status = 'applied', applied_at = ?, project_id = ?, applied_version_id = ?, updated_at = ?
+            WHERE id = ?
+        """, (now, project_id, version_id, now, session_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error applying AI session {session_id}: {e}")
+        return False
+
+def duplicate_ai_session(session_id: int):
+    try:
+        now = time.time()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get existing
+        conn.row_factory = sqlite3.Row
+        old = conn.execute("SELECT * FROM ai_sessions WHERE id = ?", (session_id,)).fetchone()
+        if not old:
+            conn.close()
+            return None
+            
+        name = old["name"] + " (Branch)"
+        
+        cursor.execute("""
+            INSERT INTO ai_sessions (parent_session_id, name, summary, prompt, input_tracks_json, variations_json, selected_variation_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (session_id, name, old["summary"], old["prompt"], old["input_tracks_json"], old["variations_json"], old["selected_variation_index"], now, now))
+        
+        new_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return new_id
+    except Exception as e:
+        print(f"Error duplicating AI session {session_id}: {e}")
+        return None
+
+def rate_ai_session(session_id: int, rating: str):
+    try:
+        now = time.time()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ai_sessions 
+            SET rating = ?, updated_at = ?
+            WHERE id = ?
+        """, (rating, now, session_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error rating AI session {session_id}: {e}")
+        return False

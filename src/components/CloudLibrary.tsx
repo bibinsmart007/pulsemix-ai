@@ -63,6 +63,7 @@ export default function CloudLibrary({
   const [projectEvents, setProjectEvents] = React.useState<ActivityEvent[]>([]);
   const [projectTasks, setProjectTasks] = React.useState<ReviewTask[]>([]);
   const [taskFilter, setTaskFilter] = React.useState<"all" | "open" | "completed">("open");
+  const [isFetching, setIsFetching] = React.useState(false);
 
   const [isAdminMode, setIsAdminMode] = React.useState(false);
   const [isAuditDrawerOpen, setIsAuditDrawerOpen] = React.useState(false);
@@ -88,23 +89,28 @@ export default function CloudLibrary({
 
   React.useEffect(() => {
     if (isOpen && cloudProject) {
-      fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/activity`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setProjectEvents(data.events);
-          }
-        })
-        .catch(err => console.error("Failed to fetch activity:", err));
-        
-      fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/tasks`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setProjectTasks(data.tasks);
-          }
-        })
-        .catch(err => console.error("Failed to fetch tasks:", err));
+      setIsFetching(true);
+      Promise.all([
+        fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/activity`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              setProjectEvents(data.events);
+            }
+          })
+          .catch(err => console.error("Failed to fetch activity:", err)),
+          
+        fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/tasks`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              setProjectTasks(data.tasks);
+            }
+          })
+          .catch(err => console.error("Failed to fetch tasks:", err))
+      ]).finally(() => {
+        setIsFetching(false);
+      });
 
       refreshExports();
     }
@@ -228,7 +234,20 @@ export default function CloudLibrary({
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
-                      {projectTasks.filter(t => taskFilter === "all" || (taskFilter === "open" && t.status !== "done") || (taskFilter === "completed" && t.status === "done")).length === 0 ? (
+                      {isFetching ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="flex items-center justify-between bg-black/40 border border-white/5 rounded-lg p-3 animate-pulse">
+                            <div className="flex items-center gap-3">
+                              <div className="w-4 h-4 rounded bg-white/10" />
+                              <div className="flex flex-col gap-2">
+                                <div className="w-32 h-3 bg-white/10 rounded" />
+                                <div className="w-24 h-2 bg-white/10 rounded" />
+                              </div>
+                            </div>
+                            <div className="w-12 h-6 bg-white/10 rounded" />
+                          </div>
+                        ))
+                      ) : projectTasks.filter(t => taskFilter === "all" || (taskFilter === "open" && t.status !== "done") || (taskFilter === "completed" && t.status === "done")).length === 0 ? (
                         <div className="text-sm text-white/30 italic p-4 text-center border border-white/5 rounded-lg bg-black/20">No tasks found</div>
                       ) : (
                         projectTasks.filter(t => taskFilter === "all" || (taskFilter === "open" && t.status !== "done") || (taskFilter === "completed" && t.status === "done")).map(task => {
@@ -349,7 +368,21 @@ export default function CloudLibrary({
             <div className="flex flex-col gap-4 flex-1 max-h-[300px]">
               <h3 className="text-sm font-bold uppercase tracking-wider text-white/40">Recent Activity</h3>
               <div className="bg-black/20 border border-white/5 rounded-xl flex-1 overflow-y-auto p-4">
-                <ActivityFeed events={projectEvents} />
+                {isFetching ? (
+                  <div className="flex flex-col gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-start gap-3 animate-pulse">
+                        <div className="w-6 h-6 rounded-full bg-white/10 shrink-0" />
+                        <div className="flex flex-col gap-2 flex-1 mt-1">
+                          <div className="w-full h-3 bg-white/10 rounded" />
+                          <div className="w-1/2 h-2 bg-white/10 rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ActivityFeed events={projectEvents} />
+                )}
               </div>
             </div>
           </div>

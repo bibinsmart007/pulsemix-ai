@@ -16,7 +16,9 @@ interface ExportJob {
   byte_size?: number;
   mime_type?: string;
   retention_policy?: string;
+  retention_source?: string;
   expires_at?: number | null;
+  status_artifact?: string;
 }
 
 interface ExportManagerProps {

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, Zap, Disc } from "lucide-react";
 import { DeckState } from "@/types/audio";
+import { PerformanceCard } from "./PerformanceCard";
 
 interface DJDeckProps {
   deckId: "A" | "B";
@@ -20,6 +21,11 @@ interface DJDeckProps {
   onTriggerHotCue: (index: number) => void;
   onToggleLoop: (bars: number) => void;
   onFileDrop: (file: File) => void;
+  onEqChange: (band: "low" | "mid" | "high", db: number) => void;
+  onFilterChange: (val: number) => void;
+  onVolumeChange: (volume: number) => void;
+  onToggleCue: () => void;
+  onExtractStems: () => void;
 }
 
 // Sub-Component: Timer Card
@@ -50,9 +56,9 @@ function TimerCard({ currentTime, duration, accentColor }: { currentTime: number
 // Sub-Component: Info Card
 function InfoCard({ title, value, span = false }: { title: string; value: React.ReactNode; span?: boolean }) {
   return (
-    <article className={`bg-[#0a0a0e] border border-white/10 rounded-xl px-5 py-3 flex flex-col justify-center shadow-[0_4px_10px_rgba(0,0,0,0.4)] ${span ? 'col-span-3 sm:col-span-1' : ''}`}>
+    <article className={`bg-[#0a0a0e] border border-white/10 rounded-xl px-5 py-3 flex flex-col justify-center shadow-[0_4px_10px_rgba(0,0,0,0.4)] ${span ? 'col-span-4 sm:col-span-2' : 'col-span-4 sm:col-span-1'}`}>
       <header className="mb-1.5 border-b border-white/5 pb-1">
-        <h4 className="text-[10px] text-neutral-500 font-mono font-bold tracking-[0.15em] uppercase">{title}</h4>
+        <h4 className="text-[10px] text-neutral-500 font-mono font-bold tracking-[0.15em] uppercase truncate">{title}</h4>
       </header>
       <div className="text-white text-[15px] font-mono font-bold tracking-wide">
         {value}
@@ -227,7 +233,8 @@ function ControlsCard({
 
 export default function DJDeck({
   deckId, state, audioElem, onPlay, onPause, onCue, onSeek, onBpmChange, onPitchChange,
-  onSync, onVinylStop, onSetHotCue, onTriggerHotCue, onToggleLoop, onFileDrop
+  onSync, onVinylStop, onSetHotCue, onTriggerHotCue, onToggleLoop, onFileDrop,
+  onEqChange, onFilterChange, onVolumeChange, onToggleCue, onExtractStems
 }: DJDeckProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const isA = deckId === "A";
@@ -381,12 +388,34 @@ export default function DJDeck({
               {state.loading ? "Loading track..." : state.title || "No Track Loaded"}
             </h3>
           </div>
+          {state.trackLoaded && state.youtube_url && (
+            <div className="flex flex-col items-end justify-center mr-4">
+              {state.stem_status === "READY" ? (
+                <div className="px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-full text-[10px] font-mono font-bold tracking-widest">
+                  STEMS READY
+                </div>
+              ) : state.stem_status === "EXTRACTING" ? (
+                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full text-[10px] font-mono font-bold tracking-widest">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  EXTRACTING...
+                </div>
+              ) : (
+                <button
+                  onClick={onExtractStems}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/30 rounded-full text-[10px] font-mono font-bold tracking-widest transition-colors flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon-cyan"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  EXTRACT STEMS
+                </button>
+              )}
+            </div>
+          )}
           <TimerCard currentTime={state.currentTime} duration={state.duration} accentColor={accentColor} />
         </div>
       </header>
 
       {/* 2. Metadata Row (Compact Grid) */}
-      <section className="grid grid-cols-3 gap-6 w-full">
+      <section className="grid grid-cols-4 gap-6 w-full">
         <InfoCard title="KEY" value={state.key || '--'} />
         <InfoCard title="BPM" value={state.bpm ? state.bpm.toFixed(1) : '--'} />
         <InfoCard 
@@ -429,8 +458,17 @@ export default function DJDeck({
               </div>
             )}
             {state.loading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                 <span className={`text-[14px] font-bold ${accentColor} font-mono tracking-[0.3em] animate-pulse`}>LOADING...</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 animate-in fade-in backdrop-blur-sm">
+                 <div className="flex flex-col items-center gap-4 w-full max-w-xs px-6">
+                   <div className="flex gap-2 items-end h-12">
+                     {[20, 40, 100, 60, 30, 80, 50, 90, 40, 20].map((h, i) => (
+                       <div key={i} className={`w-1.5 rounded-full ${accentBg} animate-pulse`} style={{ height: `${h}%`, animationDelay: `${i * 100}ms` }} />
+                     ))}
+                   </div>
+                   <div className={`text-[11px] font-bold ${accentColor} font-mono tracking-[0.3em] uppercase animate-pulse border border-${accentColor.replace('text-', '')}/30 px-4 py-1.5 rounded-full bg-${accentBg.replace('bg-', '')}/10`}>
+                     Extracting Stems
+                   </div>
+                 </div>
               </div>
             )}
           </div>
@@ -473,6 +511,13 @@ export default function DJDeck({
           <PitchCard pitch={state.pitch} onPitchChange={onPitchChange} accentBg={accentBg} />
         </div>
       </section>
+
+      {/* 4.5 Performance Controls */}
+      <PerformanceCard 
+        state={state} accentBg={accentBg}
+        onEqChange={onEqChange} onFilterChange={onFilterChange}
+        onVolumeChange={onVolumeChange} onToggleCue={onToggleCue}
+      />
 
       {/* 5. Bottom Controls */}
       <ControlsCard 

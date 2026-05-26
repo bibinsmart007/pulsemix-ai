@@ -14,7 +14,8 @@ export function useAudioEngine() {
   const [masterVolume, setMasterVolume] = useState<number>(0.8);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const [transitionProgress, setTransitionProgress] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<string>("export");
+  const [activeTab, setActiveTab] = useState<string>("assistant");
+  const [fxState, setFxState] = useState({ delay: false, reverb: false });
 
   const { audioCtxRef, initAudio, connectAudioElement, nodes } = useAudioNodes();
   
@@ -45,17 +46,29 @@ export function useAudioEngine() {
     }
   }, [masterVolume, nodes]);
 
-  const loadTrack = async (deck: "A" | "B", url: string, title: string, originalBpm: number, originalKey: string, thumbnail?: string, genre?: string) => {
-    initAudio();
-    const trackGenre = genre || "Electronic / Beats";
-    
-    const setDeck = deck === "A" ? setDeckA : setDeckB;
-    const audioRef = deck === "A" ? audioElemARef : audioElemBRef;
+  const loadTrack = async (deck: "A" | "B", url: string, title: string, originalBpm: number, originalKey: string, thumbnail?: string, genre?: string, youtube_url?: string, stem_status?: string) => {
+    const setState = deck === "A" ? setDeckA : setDeckB;
+    const aElem = deck === "A" ? audioElemARef.current : audioElemBRef.current;
+    if (!aElem) return;
 
-    setDeck(prev => ({ 
-      ...prev, loading: true, title, originalBpm, bpm: originalBpm, 
-      originalKey, key: originalKey, thumbnail: thumbnail || "", genre: trackGenre, playing: false 
+    setState((prev) => ({ 
+      ...prev, 
+      trackLoaded: false, 
+      loading: true, 
+      title, 
+      originalBpm, 
+      bpm: originalBpm, 
+      key: originalKey, 
+      originalKey, 
+      thumbnail: thumbnail || "", 
+      genre: genre || "Electronic",
+      youtube_url,
+      stem_status: (stem_status as any) || "NOT_GENERATED"
     }));
+
+    initAudio();
+    
+    const audioRef = deck === "A" ? audioElemARef : audioElemBRef;
 
     if (audioRef.current) {
       audioRef.current.pause();
@@ -68,7 +81,7 @@ export function useAudioEngine() {
     audioEl.src = url;
     
     audioEl.addEventListener("loadedmetadata", () => {
-      setDeck(prev => ({
+      setState(prev => ({
         ...prev,
         loading: false,
         trackLoaded: true,
@@ -78,7 +91,7 @@ export function useAudioEngine() {
     });
 
     audioEl.addEventListener("ended", () => {
-      setDeck(prev => ({ ...prev, playing: false, currentTime: 0 }));
+      setState(prev => ({ ...prev, playing: false, currentTime: 0 }));
     });
 
     audioRef.current = audioEl;
@@ -179,6 +192,41 @@ export function useAudioEngine() {
     });
   };
 
+  const extractStems = async (deck: "A" | "B") => {
+    const state = deck === "A" ? deckA : deckB;
+    const setDeck = deck === "A" ? setDeckA : setDeckB;
+    
+    if (!state.youtube_url) return;
+    
+    try {
+      setDeck(prev => ({ ...prev, stem_status: "EXTRACTING" }));
+      const res = await fetch("/api/stems/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtube_url: state.youtube_url })
+      });
+      if (!res.ok) throw new Error("Failed to extract");
+      
+      // Polling
+      const poll = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/stems/status?youtube_url=${encodeURIComponent(state.youtube_url as string)}`);
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            if (data.stem_status === "READY" || data.stem_status === "FAILED") {
+              clearInterval(poll);
+              setDeck(prev => ({ ...prev, stem_status: data.stem_status }));
+            }
+          }
+        } catch (e) {
+          // ignore network errors while polling
+        }
+      }, 3000);
+    } catch (e) {
+      setDeck(prev => ({ ...prev, stem_status: "FAILED" }));
+    }
+  };
+
   const updateDeckVolume = (deck: "A" | "B", volume: number) => {
     const setDeck = deck === "A" ? setDeckA : setDeckB;
     const gainNode = deck === "A" ? nodes.A.volume.current : nodes.B.volume.current;
@@ -194,11 +242,18 @@ export function useAudioEngine() {
     if (!audioCtxRef.current) return;
     const ctx = audioCtxRef.current;
     
+    setFxState(prev => ({ ...prev, [fx]: active }));
+
     if (fx === "delay" && nodes.fx.delayWet.current) {
       nodes.fx.delayWet.current.gain.setValueAtTime(active ? 0.5 : 0.0, ctx.currentTime);
     } else if (fx === "reverb" && nodes.fx.reverbWet.current) {
       nodes.fx.reverbWet.current.gain.setValueAtTime(active ? 0.6 : 0.0, ctx.currentTime);
     }
+  };
+
+  const toggleCue = (deck: "A" | "B") => {
+    const setDeck = deck === "A" ? setDeckA : setDeckB;
+    setDeck(prev => ({ ...prev, cueEnabled: !prev.cueEnabled }));
   };
 
   const triggerVinylStop = (deck: "A" | "B", stopDurationSeconds: number = 1.5) => {
@@ -353,11 +408,11 @@ export function useAudioEngine() {
   };
 
   return {
-    deckA, deckB, crossfader, masterVolume, isTransitioning, transitionProgress, activeTab,
-    analyserNode: nodes.analyser.current, audioContext: audioCtxRef.current,
-    audioElemA: audioElemARef.current, audioElemB: audioElemBRef.current,
-    setActiveTab, setCrossfader, setMasterVolume, loadTrack, playDeck, pauseDeck, seekDeck, cueDeck,
-    updateBpm, updatePitch, syncDecks, updateEQ, updateFilter, updateStemVolume, updateDeckVolume,
+    deckA, deckB, crossfader, masterVolume, isTransitioning, transitionProgress, activeTab, fxState,
+    analyserNodeRef: nodes.analyser, audioContextRef: audioCtxRef,
+    audioElemARef, audioElemBRef,
+    setActiveTab, setCrossfader, setMasterVolume, loadTrack, playDeck, pauseDeck, seekDeck, cueDeck, toggleCue,
+    updateBpm, updatePitch, syncDecks, updateEQ, updateFilter, updateStemVolume, extractStems, updateDeckVolume,
     updateFX, triggerVinylStop, setHotCue, triggerHotCue, toggleLoop, triggerAutomatedTransition,
   };
 }

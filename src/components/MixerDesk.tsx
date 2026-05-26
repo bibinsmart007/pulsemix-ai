@@ -154,24 +154,24 @@ export default function MixerDesk({
       </header>
 
       {/* Top Section: Master / Global FX */}
-      <section className="grid grid-cols-2 gap-6 relative mb-8">
+      <section className="grid grid-cols-2 gap-4 relative mb-8">
         
         {/* Master Volume Block */}
-        <div className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
+        <div className="flex flex-col bg-[#0a0a0c] p-4 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
           <div className="block w-full">
-            <header className="flex justify-between items-center bg-[#111115] px-5 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
-              <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-2 tracking-[0.1em]">
+            <header className="flex items-center justify-between gap-1 bg-[#111115] px-3 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] overflow-hidden">
+              <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-1.5 tracking-[0.1em] shrink-0">
                 <Volume2 className="w-4 h-4 text-neutral-400" /> MASTER
               </h3>
               {stateA.bpm === stateB.bpm && stateA.bpm > 0 && (
-                <span className="text-[10px] font-mono font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.4)] animate-pulse tracking-widest block">
+                <span className="text-[9px] font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.4)] animate-pulse tracking-widest block whitespace-nowrap shrink-0">
                   SYNCED
                 </span>
               )}
             </header>
           </div>
           
-          <div className="block w-full flex-1 flex flex-col justify-center px-2 py-4">
+          <div className="block w-full flex-1 flex flex-col justify-center px-1 py-3">
             <input
               type="range"
               min="0"
@@ -197,14 +197,14 @@ export default function MixerDesk({
         </div>
         
         {/* FX Toggles Block */}
-        <article className="flex flex-col bg-[#0a0a0c] p-6 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
-          <header className="flex items-center bg-[#111115] px-5 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
-            <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-2 tracking-[0.1em]">
+        <article className="flex flex-col bg-[#0a0a0c] p-4 rounded-[24px] border border-[#222] shadow-[0_8px_25px_rgba(0,0,0,0.6)] gap-4">
+          <header className="flex items-center bg-[#111115] px-3 py-3 rounded-xl border border-[#222] shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
+            <h3 className="font-mono text-[12px] text-white font-bold flex items-center gap-1.5 tracking-[0.1em]">
               <Activity className="w-4 h-4 text-neutral-400" /> GLOBAL FX
             </h3>
           </header>
 
-          <ul className="grid grid-cols-2 gap-4 flex-1 list-none p-0 m-0 w-full">
+          <ul className="grid grid-cols-2 gap-2 flex-1 list-none p-0 m-0 w-full">
             <li className="block w-full">
               <button
                 type="button"
