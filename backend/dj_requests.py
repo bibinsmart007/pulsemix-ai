@@ -5,6 +5,8 @@ import subprocess
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import librosa
+import numpy as np
 
 app = FastAPI(title="DJ Live Requests Microservice")
 
@@ -73,6 +75,30 @@ def handle_request(req: RequestURL):
         "filename": f"/music/party_29may/requests/{filename}"
     }
 
+
+class AnalyzeRequest(BaseModel):
+    filepath: str
+
+@app.post("/api/analyze")
+def handle_analyze(req: AnalyzeRequest):
+    rel_path = req.filepath
+    if rel_path.startswith("/"):
+        rel_path = rel_path[1:]
+    abs_path = os.path.join(WORKSPACE_DIR, "public", rel_path)
+    
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    try:
+        y, sr = librosa.load(abs_path, sr=None)
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        bpm = float(tempo[0]) if hasattr(tempo, "__len__") else float(tempo)
+        return {"success": True, "bpm": round(bpm, 2)}
+    except Exception as e:
+        print(f"Analyze error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
+
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8766)
