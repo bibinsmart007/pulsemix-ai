@@ -447,7 +447,10 @@
 
 <div id="startGate" style="position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;">
   <div style="font-size:18px;color:#fff;letter-spacing:4px;margin-bottom:10px;">PULSEMIX LIVE</div>
-  <button class="btn primary" id="startBtn" style="font-size:24px;padding:15px 40px;letter-spacing:2px;box-shadow:0 0 30px rgba(255,43,214,0.4);">START THE PARTY</button>
+  <div style="display:flex; gap: 15px;">
+    <button class="btn primary" id="startBtn" style="font-size:24px;padding:15px 40px;letter-spacing:2px;box-shadow:0 0 30px rgba(255,43,214,0.4);">RESUME PARTY</button>
+    <button class="btn cyan" id="restartPartyBtn" style="font-size:20px;padding:15px 30px;letter-spacing:2px;">START OVER</button>
+  </div>
   <div style="color:var(--dim);font-size:14px;letter-spacing:2px;">HIGH ENERGY MODE · 57 TRACKS · FAST CUTS (35s)</div>
   <div style="font-size:12px;color:#888;max-width:400px;text-align:center;line-height:1.5;">
     PulseMix creates dynamic, real-time DJ sets directly in your browser.<br>
@@ -1052,6 +1055,11 @@ function init() {
           $("recBtn").textContent = "⏹ STOP REC";
           $("recBtn").style.boxShadow = "0 0 15px red";
       }
+  });
+
+  $("restartPartyBtn").addEventListener("click", () => {
+    localStorage.removeItem("dj_live_save");
+    $("startBtn").click();
   });
 
   $("startBtn").addEventListener("click", async () => {
