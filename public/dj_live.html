@@ -694,7 +694,7 @@ function triggerMix() {
   const targetSkip = (TRACKS[nextIdx].skip !== undefined) ? TRACKS[nextIdx].skip : inFirstBeat;
   bAudio.currentTime = Math.max(0, targetSkip - aPhase);
 
-  const T = beatInterval * 16; 
+  const T = beatInterval * 4; 
   
   bAudio.play().catch(e => console.warn(e));
   $("bPlay").textContent = "PAUSE";
@@ -888,60 +888,7 @@ function tapTempo() {
 let micStream = null;
 let micGraph = null;
 
-async function toggleMic() {
-  if (!ctx) initAudio();
-  const btn = $("mcMicBtn");
-  if (micStream) {
-    micStream.getTracks().forEach(t => t.stop());
-    micStream = null;
-    if (micGraph) {
-      micGraph.source.disconnect();
-      micGraph.compressor.disconnect();
-      micGraph.delay.disconnect();
-      micGraph.gain.disconnect();
-      micGraph = null;
-    }
-    btn.textContent = "🎙️ MC MIC [OFF]";
-    btn.classList.remove("cyan");
-    return;
-  }
-  
-  try {
-    btn.textContent = "🎙️ CONNECTING...";
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    
-    const source = ctx.createMediaStreamSource(micStream);
-    const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.value = -24;
-    compressor.knee.value = 30;
-    compressor.ratio.value = 12;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.25;
-    
-    const delay = ctx.createDelay(1.0);
-    delay.delayTime.value = 0.2;
-    const delayGain = ctx.createGain(); delayGain.gain.value = 0.2;
-    
-    const gain = ctx.createGain();
-    gain.gain.value = 1.2;
-    
-    source.connect(compressor);
-    compressor.connect(gain);
-    compressor.connect(delay);
-    delay.connect(delayGain);
-    delayGain.connect(gain);
-    gain.connect(masterGain);
-    
-    micGraph = { source, compressor, delay, gain };
-    
-    btn.textContent = "🎙️ MC MIC [ON]";
-    btn.classList.add("cyan");
-  } catch (err) {
-    console.error(err);
-    btn.textContent = "🎙️ MIC ERROR";
-    setTimeout(() => btn.textContent = "🎙️ MC MIC [OFF]", 3000);
-  }
-}
+
 
 function init() {
   wireKnob("bgBeatTempo", v => { bgBeatBpm = v; }, v => v.toFixed(1));
@@ -1769,6 +1716,119 @@ document.getElementById("reqBtn").addEventListener("click", async () => {
     setTimeout(() => $("reqStatus").textContent = "", 4000);
 });
 
+
+let bassBoostActive = false;
+function toggleBassBoost() {
+  if (!ctx) initAudio();
+  bassBoostActive = !bassBoostActive;
+  if (bassBoostActive) {
+      if(masterBassBoost) masterBassBoost.gain.value = 15;
+      const b = document.getElementById("bassBoostBtn");
+      if(b) { b.style.background = "#ff0055"; b.style.borderColor = "#ff0055"; }
+  } else {
+      if(masterBassBoost) masterBassBoost.gain.value = 0;
+      const b = document.getElementById("bassBoostBtn");
+      if(b) { b.style.background = "#222"; b.style.borderColor = "#555"; }
+  }
+}
+
+let micActive = false;
+async function toggleMic() {
+  if (!ctx) initAudio();
+  if (!micActive) {
+      try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micNode = ctx.createMediaStreamSource(micStream);
+          if (masterDrive) micNode.connect(masterDrive);
+          micActive = true;
+          const b = document.getElementById("micBtn");
+          if(b) { b.innerHTML = "🎙️ MIC ON"; b.style.background = "#f00"; b.style.borderColor = "#f00"; }
+      } catch(e) { alert("Mic error: " + e.message); }
+  } else {
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (micNode) micNode.disconnect();
+      micNode = null; micStream = null;
+      micActive = false;
+      const b = document.getElementById("micBtn");
+      if(b) { b.innerHTML = "🎙️ MIC OFF"; b.style.background = "#222"; b.style.borderColor = "#555"; }
+  }
+}
+
+function playSample(type) {
+    if (!ctx) initAudio();
+    if (ctx.state === "suspended") ctx.resume();
+    const t = ctx.currentTime;
+    
+    if (type === 'kick') {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.connect(gain); if(masterLimiter) gain.connect(masterLimiter); else gain.connect(masterGain);
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+        gain.gain.setValueAtTime(1, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+        osc.start(t); osc.stop(t + 0.5);
+    } 
+    else if (type === 'snare') {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'triangle'; osc.connect(gain); if(masterLimiter) gain.connect(masterLimiter); else gain.connect(masterGain);
+        osc.frequency.setValueAtTime(250, t);
+        gain.gain.setValueAtTime(1, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+        osc.start(t); osc.stop(t + 0.2);
+        const bufferSize = ctx.sampleRate * 0.2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource(); noise.buffer = buffer;
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'highpass'; noiseFilter.frequency.value = 1000;
+        noise.connect(noiseFilter); noiseFilter.connect(gain);
+        noise.start(t);
+    }
+    else if (type === 'darbuka') {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'sine'; osc.connect(gain); if(masterLimiter) gain.connect(masterLimiter); else gain.connect(masterGain);
+        osc.frequency.setValueAtTime(400, t);
+        osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+        gain.gain.setValueAtTime(1, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        osc.start(t); osc.stop(t + 0.15);
+    }
+    else if (type === 'chenda') {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'square'; osc.connect(gain); if(masterLimiter) gain.connect(masterLimiter); else gain.connect(masterGain);
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.linearRampToValueAtTime(200, t + 0.2);
+        gain.gain.setValueAtTime(0.8, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        osc.start(t); osc.stop(t + 0.3);
+    }
+    else if (type === 'drums') {
+        for(let i=0; i<3; i++) {
+            let delay = i * 0.15;
+            const osc = ctx.createOscillator(), gain = ctx.createGain();
+            osc.connect(gain); if(masterLimiter) gain.connect(masterLimiter); else gain.connect(masterGain);
+            osc.frequency.setValueAtTime(200 - (i*40), t + delay);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + delay + 0.3);
+            gain.gain.setValueAtTime(1, t + delay);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + delay + 0.3);
+            osc.start(t + delay); osc.stop(t + delay + 0.3);
+        }
+    }
+    else if (type === 'violin') {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'sawtooth'; osc.connect(gain); if(masterLimiter) gain.connect(masterLimiter); else gain.connect(masterGain);
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 6;
+        const lfoGain = ctx.createGain(); lfoGain.gain.value = 10;
+        lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+        osc.frequency.setValueAtTime(659.25, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.5, t + 0.1);
+        gain.gain.setValueAtTime(0.5, t + 0.5);
+        gain.gain.linearRampToValueAtTime(0, t + 0.8);
+        lfo.start(t); osc.start(t); osc.stop(t + 0.8); lfo.stop(t + 0.8);
+    }
+}
 </script>
 
 <div class="overlay" id="editorOverlay" onclick="if(event.target.id==='editorOverlay') closeEditor()">
