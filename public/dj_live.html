@@ -425,7 +425,7 @@ let currentTrackPlayStart = 0;
 
 let ctx = null, masterAnalyser = null, bgVisualizerCtx = null;
 const decks = { A: { cues: [null, null, null, null] }, B: { cues: [null, null, null, null] } };
-let masterGain, masterBassBoost;
+let masterGain, masterBassBoost, masterDrive, masterEQ_Low, masterEQ_High, masterLimiter;
 let darbukaBuffer = null, chendaBuffer = null;
 let startTime = Date.now();
 let currentIdx = 0, nextIdx = 1;
