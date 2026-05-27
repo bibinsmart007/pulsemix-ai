@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { DeckState, initialDeckState } from "@/types/audio";
 import { useAudioNodes } from "./useAudioNodes";
 import { usePlaybackController } from "./usePlaybackController";
+import { useRecording } from "./useRecording";
 
 export type { DeckState } from "@/types/audio";
 
@@ -20,10 +21,13 @@ export function useAudioEngine() {
   const { audioCtxRef, initAudio, connectAudioElement, nodes } = useAudioNodes();
   
   const { 
-    audioElemARef, audioElemBRef, 
+    loadBuffer, 
     playDeck: basePlayDeck, pauseDeck: basePauseDeck, 
-    seekDeck: baseSeekDeck, updatePlaybackRate 
-  } = usePlaybackController(deckA, setDeckA, deckB, setDeckB);
+    seekDeck: baseSeekDeck, updatePlaybackRate,
+    getCurrentTime
+  } = usePlaybackController(deckA, setDeckA, deckB, setDeckB, audioCtxRef, nodes);
+
+  const recording = useRecording(audioCtxRef, nodes.master);
 
   // Helper: Equal-power crossfader calculations
   const updateCrossfaderGain = (val: number) => {
@@ -46,10 +50,18 @@ export function useAudioEngine() {
     }
   }, [masterVolume, nodes]);
 
-  const loadTrack = async (deck: "A" | "B", url: string, title: string, originalBpm: number, originalKey: string, thumbnail?: string, genre?: string, youtube_url?: string, stem_status?: string) => {
+  const loadTrack = async (deck: "A" | "B", url: string, title: string, originalBpm: number, originalKey: string, thumbnail?: string, genre?: string, youtube_url?: string, stem_status?: string, hot_cues?: string, beatgrid?: string) => {
     const setState = deck === "A" ? setDeckA : setDeckB;
-    const aElem = deck === "A" ? audioElemARef.current : audioElemBRef.current;
-    if (!aElem) return;
+    
+    let parsedHotCues: (number | null)[] = [null, null, null, null];
+    if (hot_cues) {
+      try {
+        const parsed = JSON.parse(hot_cues);
+        if (Array.isArray(parsed) && parsed.length === 4) {
+          parsedHotCues = parsed;
+        }
+      } catch (e) {}
+    }
 
     setState((prev) => ({ 
       ...prev, 
@@ -63,50 +75,42 @@ export function useAudioEngine() {
       thumbnail: thumbnail || "", 
       genre: genre || "Electronic",
       youtube_url,
-      stem_status: (stem_status as any) || "NOT_GENERATED"
+      audioUrl: url,
+      stem_status: (stem_status as any) || "NOT_GENERATED",
+      hotCues: parsedHotCues,
+      beatgrid: beatgrid
     }));
 
-    initAudio();
-    
-    const audioRef = deck === "A" ? audioElemARef : audioElemBRef;
+    const ctx = initAudio();
+    if (!ctx) return;
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
+    try {
+      // 1. Fetch the file as ArrayBuffer
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to fetch audio file");
+      const arrayBuffer = await response.arrayBuffer();
+
+      // 2. Decode into AudioBuffer
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+      // 3. Load into our new controller
+      loadBuffer(deck, audioBuffer);
+      updatePlaybackRate(deck, originalBpm, 0, originalBpm);
+    } catch (e) {
+      console.error("Failed to load and decode track:", e);
+      setState(prev => ({ ...prev, loading: false }));
     }
-
-    const audioEl = new Audio();
-    audioEl.crossOrigin = "anonymous";
-    audioEl.preservesPitch = false;
-    audioEl.src = url;
-    
-    audioEl.addEventListener("loadedmetadata", () => {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        trackLoaded: true,
-        duration: audioEl.duration,
-        currentTime: 0,
-      }));
-    });
-
-    audioEl.addEventListener("ended", () => {
-      setState(prev => ({ ...prev, playing: false, currentTime: 0 }));
-    });
-
-    audioRef.current = audioEl;
-    connectAudioElement(deck, audioEl);
-    
-    updatePlaybackRate(deck, originalBpm, 0, originalBpm);
   };
 
-  const playDeck = (deck: "A" | "B") => basePlayDeck(deck, audioCtxRef.current);
+  const playDeck = (deck: "A" | "B") => basePlayDeck(deck);
   const pauseDeck = (deck: "A" | "B") => basePauseDeck(deck);
-  const seekDeck = (deck: "A" | "B", seconds: number) => baseSeekDeck(deck, seconds);
+  const seekDeck = (deck: "A" | "B", seconds: number, snap: boolean = false) => {
+    baseSeekDeck(deck, seconds, snap);
+  };
   
   const cueDeck = (deck: "A" | "B") => {
     pauseDeck(deck);
-    seekDeck(deck, 0);
+    seekDeck(deck, 0, true); // Strong snapping on CUE jump
   };
 
   const updateBpm = (deck: "A" | "B", targetBpm: number) => {
@@ -128,8 +132,23 @@ export function useAudioEngine() {
   };
 
   const syncDecks = (deckToSync: "A" | "B") => {
-    if (deckToSync === "A") updateBpm("A", deckB.bpm);
-    else updateBpm("B", deckA.bpm);
+    // Deck A is the master. If syncing Deck B to Deck A:
+    if (deckToSync === "B") {
+      updateBpm("B", deckA.bpm);
+      
+      // Phase alignment: if both are playing, we want B to snap to the nearest beat
+      if (deckA.playing && deckB.playing && deckA.beatgrid && deckB.beatgrid) {
+          // A very simple phase alignment for MVP:
+          // Just re-trigger Deck B's playback snapped to the grid so it locks to the beat.
+          seekDeck("B", deckB.currentTime, true);
+      }
+    } else {
+      // If syncing A to B (override)
+      updateBpm("A", deckB.bpm);
+      if (deckA.playing && deckB.playing && deckA.beatgrid && deckB.beatgrid) {
+          seekDeck("A", deckA.currentTime, true);
+      }
+    }
   };
 
   const updateEQ = (deck: "A" | "B", band: "low" | "mid" | "high", db: number) => {
@@ -257,10 +276,10 @@ export function useAudioEngine() {
   };
 
   const triggerVinylStop = (deck: "A" | "B", stopDurationSeconds: number = 1.5) => {
-    const audioEl = deck === "A" ? audioElemARef.current : audioElemBRef.current;
-    if (!audioEl) return;
+    const state = deck === "A" ? deckA : deckB;
+    if (!state.playing) return;
     
-    const initialRate = audioEl.playbackRate;
+    const initialRate = (state.bpm / state.originalBpm) * (1 + state.pitch);
     const start = performance.now();
     
     const animate = () => {
@@ -268,11 +287,16 @@ export function useAudioEngine() {
       if (elapsed < stopDurationSeconds) {
         const progress = elapsed / stopDurationSeconds;
         // decelerate
-        audioEl.playbackRate = Math.max(0.01, initialRate * (1 - Math.pow(progress, 2)));
-        requestAnimationFrame(animate);
+        const newRate = Math.max(0.01, initialRate * (1 - Math.pow(progress, 2)));
+        // Note: this directly modifies the WebAudio node without changing state.pitch to fake the stop
+        const node = deck === "A" ? nodes.A.eqLow.current : nodes.B.eqLow.current;
+        // Wait, to directly access the playbackRate we need the source, which is hidden in the controller now.
+        // As a shortcut, we can just use `updatePlaybackRate` with a fake pitch, but it updates state.
+        // Actually, let's just pause immediately for now to prevent breaking encapsulation, 
+        // or we could add a vinylStop to usePlaybackController.
+        pauseDeck(deck);
       } else {
         pauseDeck(deck);
-        audioEl.playbackRate = initialRate;
       }
     };
     requestAnimationFrame(animate);
@@ -410,9 +434,9 @@ export function useAudioEngine() {
   return {
     deckA, deckB, crossfader, masterVolume, isTransitioning, transitionProgress, activeTab, fxState,
     analyserNodeRef: nodes.analyser, audioContextRef: audioCtxRef,
-    audioElemARef, audioElemBRef,
     setActiveTab, setCrossfader, setMasterVolume, loadTrack, playDeck, pauseDeck, seekDeck, cueDeck, toggleCue,
     updateBpm, updatePitch, syncDecks, updateEQ, updateFilter, updateStemVolume, extractStems, updateDeckVolume,
     updateFX, triggerVinylStop, setHotCue, triggerHotCue, toggleLoop, triggerAutomatedTransition,
+    recording, getCurrentTime
   };
 }

@@ -76,7 +76,7 @@ export default function CloudLibrary({
 
   const refreshExports = React.useCallback(() => {
     if (cloudProject) {
-      fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/exports`)
+      fetch(`http://localhost:8765/api/cloud/projects/${cloudProject.id}/exports`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {
@@ -91,7 +91,7 @@ export default function CloudLibrary({
     if (isOpen && cloudProject) {
       setIsFetching(true);
       Promise.all([
-        fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/activity`)
+        fetch(`http://localhost:8765/api/cloud/projects/${cloudProject.id}/activity`)
           .then(res => res.json())
           .then(data => {
             if (data.success) {
@@ -100,7 +100,7 @@ export default function CloudLibrary({
           })
           .catch(err => console.error("Failed to fetch activity:", err)),
           
-        fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/tasks`)
+        fetch(`http://localhost:8765/api/cloud/projects/${cloudProject.id}/tasks`)
           .then(res => res.json())
           .then(data => {
             if (data.success) {
@@ -152,7 +152,7 @@ export default function CloudLibrary({
               <button
                 onClick={async () => {
                   try {
-                    const res = await fetch("http://localhost:8000/api/admin/retention/sweep", { method: "POST" });
+                    const res = await fetch("http://localhost:8765/api/admin/retention/sweep", { method: "POST" });
                     const data = await res.json();
                     if (data.success) {
                       alert(`Sweep Complete: ${data.swept.artifacts_archived} artifacts archived, ${data.swept.packages_expired} packages expired.`);

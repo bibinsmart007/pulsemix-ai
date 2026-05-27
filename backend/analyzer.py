@@ -2,6 +2,7 @@ import os
 import random
 import numpy as np
 import json
+import traceback
 
 # Krumhansl-Schmuckler key profiles for music information retrieval
 MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
@@ -11,7 +12,6 @@ PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
 
 # Camelot Wheel conversions
 KEY_TO_CAMELOT = {
-    # Minor Keys
     "Abm": "1A", "Ab Minor": "1A", "G#m": "1A",
     "Ebm": "2A", "Eb Minor": "2A", "D#m": "2A",
     "Bbm": "3A", "Bb Minor": "3A", "A#m": "3A",
@@ -24,8 +24,6 @@ KEY_TO_CAMELOT = {
     "Bm":  "10A", "B Minor": "10A",
     "F#m": "11A", "F# Minor": "11A",
     "C#m": "12A", "C# Minor": "12A",
-
-    # Major Keys
     "B":   "1B", "B Major":   "1B",
     "F#":  "2B", "F# Major":  "2B", "Gb": "2B",
     "Db":  "3B", "Db Major":  "3B", "C#": "3B",
@@ -41,19 +39,13 @@ KEY_TO_CAMELOT = {
 }
 
 def estimate_key(chroma_vector):
-    """
-    Finds the key by correlating a 12-dimensional chromagram vector 
-    against Krumhansl-Schmuckler major/minor templates.
-    """
     best_corr = -1
-    best_key = "Am" # default fallback
+    best_key = "Am"
     
     for i in range(12):
-        # Shift profiles to match root pitch class
         shifted_major = np.roll(MAJOR_PROFILE, i)
         shifted_minor = np.roll(MINOR_PROFILE, i)
         
-        # Pearson correlation coefficient
         corr_maj = np.corrcoef(chroma_vector, shifted_major)[0, 1]
         corr_min = np.corrcoef(chroma_vector, shifted_minor)[0, 1]
         
@@ -68,13 +60,9 @@ def estimate_key(chroma_vector):
     return best_key, best_corr
 
 class AudioAnalyzer:
-    """
-    Abstraction layer for Music Information Retrieval (MIR).
-    Currently delegates to librosa, but provides a forward-compatible interface
-    for Essentia (e.g. rhythm_extractor, key_extractor).
-    """
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str, full_analysis: bool = True):
         self.filepath = filepath
+        self.full_analysis = full_analysis
         self._y = None
         self._sr = None
         import librosa
@@ -82,51 +70,107 @@ class AudioAnalyzer:
 
     def _load_audio(self):
         if self._y is None:
-            # Load 45 seconds of the song's middle/chorus portion for more accurate key/tempo detection
-            self._y, self._sr = self.librosa.load(self.filepath, sr=22050, duration=45, offset=15)
+            if self.full_analysis:
+                # Load full track
+                self._y, self._sr = self.librosa.load(self.filepath, sr=22050)
+            else:
+                # Fallback lightweight 45s analysis
+                self._y, self._sr = self.librosa.load(self.filepath, sr=22050, duration=45, offset=15)
 
-    def extract_bpm_and_beats(self) -> tuple[float, float, list[float], list[float], float]:
-        """Essentia-like rhythm extractor returning (bpm, confidence, beatgrid, phrase_markers, downbeat_confidence)"""
+    def extract_bpm_and_beats(self) -> tuple[float, float, list[float], list[float], list[float], float]:
         self._load_audio()
+        
+        # 1. Beat Tracking
         tempo, beats = self.librosa.beat.beat_track(y=self._y, sr=self._sr)
         bpm = float(tempo[0]) if isinstance(tempo, (np.ndarray, list)) else float(tempo)
         
-        # Guard against half/double tempo octave errors (e.g. 60bpm or 240bpm)
-        if bpm < 75:
-            bpm = bpm * 2
-        elif bpm > 150:
-            bpm = bpm / 2
+        if bpm < 75: bpm = bpm * 2
+        elif bpm > 150: bpm = bpm / 2
             
-        confidence = 0.9 if len(beats) > 10 else 0.4
-        
-        # Extract beatgrid times
+        bpm_confidence = 0.95 if len(beats) > (20 if self.full_analysis else 10) else 0.4
         beat_times = self.librosa.frames_to_time(beats, sr=self._sr).tolist()
         
-        # Estimate phrase markers (assuming 4/4 time and 16-beat phrases)
-        phrase_markers = []
-        if len(beat_times) > 0:
-            # We assume the first beat detected is a downbeat, then every 16th beat starts a phrase
-            # For a more advanced V2, we would use PLP or spectral novelty to find true downbeats.
-            for i in range(0, len(beat_times), 16):
-                phrase_markers.append(beat_times[i])
-                
-        downbeat_confidence = confidence * 0.8  # Heuristic confidence for V1
+        if len(beats) < 4:
+            return round(bpm, 1), bpm_confidence, beat_times, [], [], 0.0
+
+        # 2. Downbeat Heuristic via Bass Energy
+        # Extract low-frequency onset strength (e.g. kick drums)
+        bass_onset = self.librosa.onset.onset_strength(y=self._y, sr=self._sr, fmax=150)
         
-        return round(bpm, 1), confidence, beat_times, phrase_markers, downbeat_confidence
+        # We assume 4/4 time. We calculate the average bass energy for each of the 4 phases.
+        phase_energies = np.zeros(4)
+        phase_counts = np.zeros(4)
+        
+        for i, beat_frame in enumerate(beats):
+            phase = i % 4
+            # safely get onset strength at this frame
+            if beat_frame < len(bass_onset):
+                phase_energies[phase] += bass_onset[beat_frame]
+                phase_counts[phase] += 1
+                
+        # Average energy per phase
+        avg_phase_energies = np.divide(phase_energies, phase_counts, out=np.zeros_like(phase_energies), where=phase_counts!=0)
+        
+        # The phase with the highest average bass energy is the downbeat (Beat 1)
+        downbeat_phase = int(np.argmax(avg_phase_energies))
+        
+        # Calculate confidence
+        sorted_energies = np.sort(avg_phase_energies)[::-1]
+        downbeat_confidence = 0.0
+        if sorted_energies[0] > 0:
+            downbeat_confidence = float((sorted_energies[0] - sorted_energies[1]) / sorted_energies[0])
+            
+        downbeat_confidence = min(1.0, max(0.0, downbeat_confidence * 1.5)) # Scale up slightly
+        
+        # 3. Extract Downbeats (Phrase Markers)
+        phrase_markers = []
+        downbeat_indices = []
+        for i in range(len(beat_times)):
+            if i % 4 == downbeat_phase:
+                phrase_markers.append(beat_times[i])
+                downbeat_indices.append(i)
+                
+        # 4. Extract Structural Cue Points (Hot Cues)
+        # Compute global novelty/onset across full spectrum
+        global_onset = self.librosa.onset.onset_strength(y=self._y, sr=self._sr)
+        
+        hot_cues = []
+        if self.full_analysis and len(downbeat_indices) > 0:
+            # We want to find downbeats that correspond to large structural changes (high global novelty)
+            downbeat_frames = [beats[i] for i in downbeat_indices if beats[i] < len(global_onset)]
+            if downbeat_frames:
+                downbeat_novelty = [global_onset[f] for f in downbeat_frames]
+                
+                # Pick the top 4 highest novelty downbeats, ensuring they are spaced apart (e.g. at least 15 seconds)
+                min_spacing_frames = int(15.0 * self._sr / 512) # hop length is 512
+                
+                sorted_downbeat_idx = np.argsort(downbeat_novelty)[::-1]
+                selected_frames = []
+                
+                for idx in sorted_downbeat_idx:
+                    frame = downbeat_frames[idx]
+                    # Check spacing
+                    if all(abs(frame - sf) > min_spacing_frames for sf in selected_frames):
+                        selected_frames.append(frame)
+                        if len(selected_frames) == 4:
+                            break
+                            
+                selected_frames.sort()
+                hot_cues = self.librosa.frames_to_time(selected_frames, sr=self._sr).tolist()
+        
+        return round(bpm, 1), bpm_confidence, beat_times, phrase_markers, hot_cues, downbeat_confidence
 
     def extract_key(self) -> tuple[str, str, float]:
-        """Essentia-like key extractor mapped to Camelot"""
         self._load_audio()
-        chroma = self.librosa.feature.chroma_cqt(y=self._y, sr=self._sr)
+        # Upgrade to chroma_cens for better harmonic extraction robust to dynamics
+        chroma = self.librosa.feature.chroma_cens(y=self._y, sr=self._sr)
         chroma_mean = np.mean(chroma, axis=1)
         estimated, corr = estimate_key(chroma_mean)
         camelot = KEY_TO_CAMELOT.get(estimated, "8A")
         return estimated, camelot, float(corr)
 
     def extract_waveform(self) -> str:
-        """Extracts a low-resolution amplitude envelope (200 points) for UI rendering"""
         try:
-            # Load full audio at very low sample rate for fast envelope extraction
             y, sr = self.librosa.load(self.filepath, sr=1000)
             points = 200
             hop_length = max(1, len(y) // points)
@@ -135,7 +179,6 @@ class AudioAnalyzer:
                 chunk = y[i:i+hop_length]
                 envelope.append(float(np.max(np.abs(chunk))) if len(chunk) > 0 else 0.0)
             
-            # Normalize to 0.0 - 1.0
             max_val = max(envelope) if envelope else 1.0
             if max_val > 0:
                 envelope = [round(v / max_val, 3) for v in envelope]
@@ -145,43 +188,54 @@ class AudioAnalyzer:
             print(f"[Analyzer] Failed to extract waveform: {e}")
             return "[]"
 
+def _run_analysis(filepath: str, full_analysis: bool) -> dict:
+    analyzer = AudioAnalyzer(filepath, full_analysis=full_analysis)
+    raw_bpm, bpm_confidence, beatgrid, phrase_markers, hot_cues, downbeat_confidence = analyzer.extract_bpm_and_beats()
+    
+    bpm = 0.0 if bpm_confidence < 0.3 else raw_bpm
+    raw_key, camelot_key, key_corr = analyzer.extract_key()
+    waveform = analyzer.extract_waveform()
+    
+    print(f"[Analyzer] Completed ({'FULL' if full_analysis else 'FALLBACK'}): {bpm} BPM, Key {raw_key} ({camelot_key})")
+    
+    # Ensure exactly 4 hot cues
+    hot_cues_padded = (hot_cues + [None, None, None, None])[:4]
+    
+    return {
+        "bpm": bpm,
+        "raw_bpm": raw_bpm,
+        "bpm_confidence": bpm_confidence,
+        "key": raw_key,
+        "key_camelot": camelot_key,
+        "key_confidence": key_corr,
+        "waveform_data": waveform,
+        "beatgrid": json.dumps(beatgrid),
+        "phrase_markers": json.dumps(phrase_markers),
+        "hot_cues": json.dumps(hot_cues_padded),
+        "downbeat_confidence": downbeat_confidence,
+        "analysis_mode": "FULL" if full_analysis else "FALLBACK"
+    }
 
 def analyze_audio(filepath: str) -> dict:
     """Main entrypoint for backend audio analysis."""
     print(f"[Analyzer] Starting deep audio analysis on {filepath}")
     
     try:
-        analyzer = AudioAnalyzer(filepath)
-        raw_bpm, bpm_confidence, beatgrid, phrase_markers, downbeat_confidence = analyzer.extract_bpm_and_beats()
-        
-        bpm = 0.0 if bpm_confidence < 0.3 else raw_bpm
-        raw_key, camelot_key, key_corr = analyzer.extract_key()
-        waveform = analyzer.extract_waveform()
-        
-        print(f"[Analyzer] Completed: {bpm} BPM (raw {raw_bpm}), Key {raw_key} ({camelot_key})")
-        return {
-            "bpm": bpm,
-            "raw_bpm": raw_bpm,
-            "bpm_confidence": bpm_confidence,
-            "key": raw_key,
-            "key_camelot": camelot_key,
-            "key_confidence": key_corr,
-            "waveform_data": waveform,
-            "beatgrid": json.dumps(beatgrid),
-            "phrase_markers": json.dumps(phrase_markers),
-            "downbeat_confidence": downbeat_confidence
-        }
+        # Attempt full-track analysis
+        return _run_analysis(filepath, full_analysis=True)
     except Exception as e:
-        print(f"[Analyzer] Failed to analyze {filepath}: {e}")
-        # Fallback to explicit unknowns instead of faking 128.0 BPM
-        return {
-            "bpm": None,
-            "bpm_confidence": 0.0,
-            "key": None,
-            "key_camelot": None,
-            "key_confidence": 0.0,
-            "waveform_data": "[]",
-            "beatgrid": "[]",
-            "phrase_markers": "[]",
-            "downbeat_confidence": 0.0
-        }
+        print(f"[Analyzer] Full analysis failed for {filepath}: {e}")
+        traceback.print_exc()
+        try:
+            # Fallback to lightweight analysis
+            print(f"[Analyzer] Attempting fallback lightweight analysis on {filepath}")
+            return _run_analysis(filepath, full_analysis=False)
+        except Exception as fallback_e:
+            print(f"[Analyzer] Fallback analysis also failed: {fallback_e}")
+            return {
+                "bpm": None, "bpm_confidence": 0.0,
+                "key": None, "key_camelot": None, "key_confidence": 0.0,
+                "waveform_data": "[]", "beatgrid": "[]", 
+                "phrase_markers": "[]", "hot_cues": json.dumps([None, None, None, None]),
+                "downbeat_confidence": 0.0, "analysis_mode": "FAILED"
+            }

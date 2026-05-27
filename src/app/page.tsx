@@ -260,7 +260,7 @@ export default function Home() {
 
   const fetchAiSessions = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ai/sessions");
+      const res = await fetch("http://127.0.0.1:8765/api/ai/sessions");
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -280,7 +280,7 @@ export default function Home() {
 
   const handleLoadSession = async (sessionId: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/ai/sessions/${sessionId}`);
+      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/${sessionId}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.session) {
@@ -301,7 +301,7 @@ export default function Home() {
   const handleRateSession = async (sessionId: number, rating: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/ai/sessions/${sessionId}/rate`, {
+      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/${sessionId}/rate`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating })
@@ -318,7 +318,7 @@ export default function Home() {
 
     e.stopPropagation();
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/ai/sessions/${sessionId}/duplicate`, { method: "POST" });
+      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/${sessionId}/duplicate`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -335,7 +335,7 @@ export default function Home() {
   const handleCompareSessions = async () => {
     if (selectedForCompare.length !== 2) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/ai/sessions/compare?id1=${selectedForCompare[0]}&id2=${selectedForCompare[1]}`);
+      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/compare?id1=${selectedForCompare[0]}&id2=${selectedForCompare[1]}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -560,7 +560,7 @@ export default function Home() {
     if (autoLoadedRef.current) return;
     autoLoadedRef.current = true;
 
-    fetch("http://127.0.0.1:8000/api/inventory")
+    fetch("http://127.0.0.1:8765/api/inventory")
       .then(res => res.json())
       .then(data => {
         if (data && data.tracks) {
@@ -650,7 +650,7 @@ export default function Home() {
   const handleRecoverAuto = async (item: any) => {
     try {
       addGlobalJob(`recover-${item.item_id}`, `Recovering ${item.title}`);
-      await fetch("http://localhost:8000/api/tracks/recover/auto", {
+      await fetch("http://localhost:8765/api/tracks/recover/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: item.youtube_url })
@@ -667,7 +667,7 @@ export default function Home() {
       const buffer = await file.arrayBuffer();
       addGlobalJob(`recover-manual-${recoveringItem.item_id}`, `Uploading ${file.name}`);
       
-      await fetch("http://localhost:8000/api/tracks/recover/manual", {
+      await fetch("http://localhost:8765/api/tracks/recover/manual", {
         method: "POST",
         headers: {
           "x-youtube-url": recoveringItem.youtube_url,
@@ -684,14 +684,14 @@ export default function Home() {
   const handlePreviewTransition = async (itemId: number, playlistId: number) => {
     try {
       addToast('Rendering transition preview...', 'info');
-      const res = await fetch(`http://127.0.0.1:8000/api/preview-transition/${itemId}`, {
+      const res = await fetch(`http://127.0.0.1:8765/api/preview-transition/${itemId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playlist_id: playlistId })
       });
       const data = await res.json();
       if (data.success) {
-        const audio = new Audio(`http://127.0.0.1:8000${data.url}`);
+        const audio = new Audio(`http://127.0.0.1:8765${data.url}`);
         audio.play();
         addToast('Playing transition preview...', 'success');
       } else {
@@ -706,7 +706,7 @@ export default function Home() {
   const handlePublishVersion = async (config: PublishConfig) => {
     if (!publishTargetVersion) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/cloud/versions/${publishTargetVersion}/publish`, {
+      const res = await fetch(`http://127.0.0.1:8765/api/cloud/versions/${publishTargetVersion}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -735,7 +735,7 @@ export default function Home() {
 
   const handleOpenPublicLink = async (token: string, password?: string) => {
     try {
-      let url = `http://127.0.0.1:8000/api/public/publish/${token}`;
+      let url = `http://127.0.0.1:8765/api/public/publish/${token}`;
       if (password) url += `?pwd=${encodeURIComponent(password)}`;
       
       const res = await fetch(url);
@@ -759,7 +759,7 @@ export default function Home() {
 
   const handleFetchActiveLinks = async (versionId: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/cloud/versions/${versionId}/links`);
+      const res = await fetch(`http://127.0.0.1:8765/api/cloud/versions/${versionId}/links`);
       const data = await res.json();
       if (data.success) {
         setActivePublishLinks(data.links);
@@ -772,7 +772,7 @@ export default function Home() {
 
   const handleRevokeLink = async (token: string, versionId: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/cloud/publish/${token}/revoke`, { method: "POST" });
+      const res = await fetch(`http://127.0.0.1:8765/api/cloud/publish/${token}/revoke`, { method: "POST" });
       const data = await res.json();
       if (data.success) {
         addToast("Link revoked", "success");
@@ -785,7 +785,7 @@ export default function Home() {
 
   const fetchPlaylists = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/playlists?t=${Date.now()}`);
+      const res = await fetch(`http://127.0.0.1:8765/api/playlists?t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
         setPlaylists(data.playlists);
@@ -814,7 +814,7 @@ export default function Home() {
     if (playlists.length > 0 && !activePlaylistId) {
       const firstId = playlists[0].id;
       setActivePlaylistId(firstId);
-      fetch(`http://127.0.0.1:8000/api/playlists/${firstId}/items`)
+      fetch(`http://127.0.0.1:8765/api/playlists/${firstId}/items`)
         .then(r => r.json())
         .then(d => { if(d.success) setActivePlaylistItems(d.items); })
         .catch(e => console.error("Failed to auto-load playlist items:", e));
@@ -824,7 +824,7 @@ export default function Home() {
   // Fetch export jobs so the UI shows the history and latest result on reload
   const fetchExportHistory = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/export?t=${Date.now()}`);
+      const res = await fetch(`http://127.0.0.1:8765/api/export?t=${Date.now()}`);
       const d = await res.json();
       if (d.success && d.jobs) {
         setExportHistory(d.jobs);
@@ -863,7 +863,7 @@ export default function Home() {
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/playlists", {
+      const res = await fetch("http://127.0.0.1:8765/api/playlists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newPlaylistName })
@@ -888,7 +888,7 @@ export default function Home() {
   const loadPlaylistItems = async (playlistId: number, currentSnap: boolean = autoPhraseSnap) => {
     setActivePlaylistId(playlistId);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/playlists/${playlistId}/items?t=${Date.now()}&auto_phrase_snap=${currentSnap}`);
+      const res = await fetch(`http://127.0.0.1:8765/api/playlists/${playlistId}/items?t=${Date.now()}&auto_phrase_snap=${currentSnap}`);
       const data = await res.json();
       if (data.success) {
         setActivePlaylistItems(data.items);
@@ -897,6 +897,36 @@ export default function Home() {
       console.error(e);
     }
   };
+
+  const handleSortByEnergy = async () => {
+    if (!activePlaylistId) return;
+    
+    const sortedItems = [...activePlaylistItems].sort((a, b) => {
+      const bpmA = a.track_metadata?.bpm || 999;
+      const bpmB = b.track_metadata?.bpm || 999;
+      return bpmA - bpmB;
+    });
+    
+    const itemIds = sortedItems.map(item => item.item_id);
+    
+    try {
+      const res = await fetch(`http://127.0.0.1:8765/api/playlists/${activePlaylistId}/items/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_ids: itemIds })
+      });
+      if (res.ok) {
+        await loadPlaylistItems(activePlaylistId);
+        addToast("Playlist sorted by Energy (BPM)!", "success");
+      } else {
+        addToast("Failed to sort by energy.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      addToast("Network error during sort.", "error");
+    }
+  };
+
 
   useEffect(() => {
     if (activePlaylistId) {
@@ -922,7 +952,7 @@ export default function Home() {
       setExportStatus("queued");
       setShowExportModal(false);
       addToast("Export started!", "info");
-      const res = await fetch("http://127.0.0.1:8000/api/export", {
+      const res = await fetch("http://127.0.0.1:8765/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playlist_id: pid, export_name: name, auto_phrase_snap: autoPhraseSnap })
@@ -949,7 +979,7 @@ export default function Home() {
     
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/export/${exportJobId}`);
+        const res = await fetch(`http://127.0.0.1:8765/api/export/${exportJobId}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.job) {
@@ -996,7 +1026,7 @@ export default function Home() {
     if (!trackToAdd) return;
     try {
       const orderIndex = activePlaylistItems.length;
-      const res = await fetch(`http://127.0.0.1:8000/api/playlists/${playlistId}/items`, {
+      const res = await fetch(`http://127.0.0.1:8765/api/playlists/${playlistId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ youtube_url: trackToAdd.youtube_url || trackToAdd.url, position_index: orderIndex })
@@ -1037,7 +1067,7 @@ export default function Home() {
     updateGlobalJob(jobId, { title: 'AI Mix Generation', type: 'ai_generation', status: 'Processing' });
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/ai/generate", {
+      const response = await fetch("http://127.0.0.1:8765/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1057,7 +1087,7 @@ export default function Home() {
         
         // Auto-save the AI Session
         try {
-          const saveRes = await fetch("http://127.0.0.1:8000/api/ai/sessions", {
+          const saveRes = await fetch("http://127.0.0.1:8765/api/ai/sessions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1121,7 +1151,7 @@ export default function Home() {
     if (!retryUrl) setYoutubeUrl("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/import", {
+      const response = await fetch("http://127.0.0.1:8765/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlToImport }),
@@ -1137,7 +1167,7 @@ export default function Home() {
         
         const pollInterval = setInterval(async () => {
           try {
-            const statusRes = await fetch(`http://127.0.0.1:8000/api/status/${jobId}`);
+            const statusRes = await fetch(`http://127.0.0.1:8765/api/status/${jobId}`);
             if (!statusRes.ok) throw new Error("Status check failed");
             
             const statusData = await statusRes.json();
@@ -1318,7 +1348,7 @@ export default function Home() {
         }}
         onViewPublishLinks={(versionId) => {
           setPublishTargetVersion(versionId);
-          fetch(`http://127.0.0.1:8000/api/cloud/versions/${versionId}/links`)
+          fetch(`http://127.0.0.1:8765/api/cloud/versions/${versionId}/links`)
             .then(res => res.json())
             .then(data => {
               if (data.success) {
@@ -1330,7 +1360,7 @@ export default function Home() {
         onPublishVersion={(versionId) => {
           setPublishTargetVersion(versionId);
           if (cloudProject) {
-            fetch(`http://localhost:8000/api/cloud/projects/${cloudProject.id}/exports`)
+            fetch(`http://localhost:8765/api/cloud/projects/${cloudProject.id}/exports`)
               .then(res => res.json())
               .then(data => {
                 if (data.success) {
@@ -1417,7 +1447,7 @@ export default function Home() {
         
         {/* Quick HUD & Help */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-4 font-mono text-[9px] text-neutral-500">
+          <div className="flex items-center gap-4 font-mono text-[9px] text-neutral-500 mr-4">
             <div className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${engine.deckA.playing ? 'bg-neon-cyan animate-ping' : 'bg-neutral-700'}`} />
               <span>DECK A: <b className="text-neutral-300 font-semibold">{engine.deckA.playing ? "PLAYING" : "IDLE"}</b></span>
@@ -1427,6 +1457,52 @@ export default function Home() {
               <span>DECK B: <b className="text-neutral-300 font-semibold">{engine.deckB.playing ? "PLAYING" : "IDLE"}</b></span>
             </div>
           </div>
+
+          {/* Phase 64: Recording UI */}
+          <div className="flex items-center gap-3 border-r border-white/10 pr-6 mr-2">
+            <button
+              onClick={() => engine.recording.isRecording ? engine.recording.stopRecording() : engine.recording.startRecording()}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full border transition-all ${
+                engine.recording.isRecording 
+                  ? 'bg-red-500/10 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+                  : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white hover:bg-white/10'
+              }`}
+              title={engine.recording.isRecording ? "Stop Recording" : "Record Live Mix"}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full ${engine.recording.isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-500'}`} />
+              <span className="text-[10px] font-mono font-bold tracking-wider">
+                {engine.recording.isRecording ? 'RECORDING' : 'REC MIX'}
+              </span>
+            </button>
+            
+            {engine.recording.isRecording && (
+              <span className={`text-xs font-mono font-bold w-12 ${engine.recording.recordingTimeMs > 25 * 60 * 1000 ? 'text-amber-500' : 'text-red-400'}`}>
+                {Math.floor(engine.recording.recordingTimeMs / 60000).toString().padStart(2, '0')}:
+                {Math.floor((engine.recording.recordingTimeMs % 60000) / 1000).toString().padStart(2, '0')}
+              </span>
+            )}
+            
+            {engine.recording.recordingUrl && !engine.recording.isRecording && (
+              <div className="flex items-center gap-1">
+                <a 
+                  href={engine.recording.recordingUrl} 
+                  download={`pulsemix-live-${new Date().toISOString().slice(0, 10)}.webm`}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 rounded-full border border-green-500/30 hover:bg-green-500/20 transition-colors text-[10px] font-mono font-bold tracking-wider shadow-[0_0_10px_rgba(34,197,94,0.1)]"
+                >
+                  <Download className="w-3 h-3" />
+                  SAVE .WEBM
+                </a>
+                <button 
+                  onClick={() => engine.recording.clearRecording()}
+                  className="p-1.5 text-neutral-500 hover:text-white rounded-full hover:bg-white/10"
+                  title="Clear Recording"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+
           
           <button 
             onClick={() => setShowGuideOverlay(true)}
@@ -1606,7 +1682,7 @@ export default function Home() {
                   <DJDeck 
                     deckId="A" 
                     state={engine.deckA}
-                    audioElem={engine.audioElemARef.current}
+                    getCurrentTime={() => engine.getCurrentTime("A")}
                     onPlay={() => engine.playDeck("A")}
                     onPause={() => engine.pauseDeck("A")}
                     onCue={() => engine.cueDeck("A")}
@@ -1664,7 +1740,7 @@ export default function Home() {
                   <DJDeck 
                     deckId="B" 
                     state={engine.deckB}
-                    audioElem={engine.audioElemBRef.current}
+                    getCurrentTime={() => engine.getCurrentTime("B")}
                     onPlay={() => engine.playDeck("B")}
                     onPause={() => engine.pauseDeck("B")}
                     onCue={() => engine.cueDeck("B")}
@@ -1970,12 +2046,12 @@ export default function Home() {
                             const { deck_a, deck_b, suggested_bpm } = selected;
                             
                             // Populate the AudioEngine decks
-                            engine.loadTrack("A", deck_a.url, deck_a.title, suggested_bpm, deck_a.key, deck_a.thumbnail, deck_a.genre || "Auto", deck_a.youtube_url || deck_a.url, deck_a.stem_status);
-                            engine.loadTrack("B", deck_b.url, deck_b.title, suggested_bpm, deck_b.key, deck_b.thumbnail, deck_b.genre || "Auto", deck_b.youtube_url || deck_b.url, deck_b.stem_status);
+                            engine.loadTrack("A", deck_a.url, deck_a.title, suggested_bpm, deck_a.key, deck_a.thumbnail, deck_a.genre || "Auto", deck_a.youtube_url || deck_a.url, deck_a.stem_status, deck_a.hot_cues, deck_a.beatgrid);
+                            engine.loadTrack("B", deck_b.url, deck_b.title, suggested_bpm, deck_b.key, deck_b.thumbnail, deck_b.genre || "Auto", deck_b.youtube_url || deck_b.url, deck_b.stem_status, deck_b.hot_cues, deck_b.beatgrid);
                             
                             if (currentAiSessionId) {
                                try {
-                                 await fetch(`http://127.0.0.1:8000/api/ai/sessions/${currentAiSessionId}/apply`, {
+                                 await fetch(`http://127.0.0.1:8765/api/ai/sessions/${currentAiSessionId}/apply`, {
                                    method: "PUT",
                                    headers: { "Content-Type": "application/json" },
                                    body: JSON.stringify({
@@ -2088,11 +2164,11 @@ export default function Home() {
                                   onClick={async () => {
                                     if (!activeVariant) return;
                                     const { deck_a, deck_b, suggested_bpm } = activeVariant;
-                                    engine.loadTrack("A", deck_a.url, deck_a.title, suggested_bpm, deck_a.key, deck_a.thumbnail, deck_a.genre || "Auto", deck_a.youtube_url || deck_a.url, deck_a.stem_status);
-                                    engine.loadTrack("B", deck_b.url, deck_b.title, suggested_bpm, deck_b.key, deck_b.thumbnail, deck_b.genre || "Auto", deck_b.youtube_url || deck_b.url, deck_b.stem_status);
+                                    engine.loadTrack("A", deck_a.url, deck_a.title, suggested_bpm, deck_a.key, deck_a.thumbnail, deck_a.genre || "Auto", deck_a.youtube_url || deck_a.url, deck_a.stem_status, deck_a.hot_cues, deck_a.beatgrid);
+                                    engine.loadTrack("B", deck_b.url, deck_b.title, suggested_bpm, deck_b.key, deck_b.thumbnail, deck_b.genre || "Auto", deck_b.youtube_url || deck_b.url, deck_b.stem_status, deck_b.hot_cues, deck_b.beatgrid);
                                     
                                     try {
-                                       await fetch(`http://127.0.0.1:8000/api/ai/sessions/${session.id}/apply`, {
+                                       await fetch(`http://127.0.0.1:8765/api/ai/sessions/${session.id}/apply`, {
                                          method: "PUT",
                                          headers: { "Content-Type": "application/json" },
                                          body: JSON.stringify({ project_id: cloudProject?.id || null, version_id: currentVersionId || null })
@@ -2655,7 +2731,17 @@ export default function Home() {
                       <h3 className="font-bold text-sm tracking-wider font-mono text-white">
                         {playlists.find(p => p.id === activePlaylistId)?.name.toUpperCase()}
                       </h3>
-                      <span className="text-[10px] text-neutral-500 font-mono">{activePlaylistItems.length} TRACKS</span>
+                      <div className="flex gap-3 items-center">
+                        <button
+                          onClick={handleSortByEnergy}
+                          title="Sort tracks by BPM ascending to build energy over the mix"
+                          className="px-3 py-1 bg-neon-cyan/10 hover:bg-neon-cyan/20 text-neon-cyan rounded text-[10px] font-bold tracking-wider transition-colors border border-neon-cyan/30 flex items-center gap-1"
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          SORT BY ENERGY
+                        </button>
+                        <span className="text-[10px] text-neutral-500 font-mono">{activePlaylistItems.length} TRACKS</span>
+                      </div>
                     </div>
 
                     <div className="flex gap-4 items-start relative min-h-[400px]">
@@ -2698,7 +2784,7 @@ export default function Home() {
                             selectedItemId={selectedItemId}
                             onSelectItem={(id) => setSelectedItemId(id)}
                             onUpdateItem={(itemId, updates) => {
-                              fetch(`http://127.0.0.1:8000/api/playlist-items/${itemId}`, { 
+                              fetch(`http://127.0.0.1:8765/api/playlist-items/${itemId}`, { 
                                 method: "PUT", 
                                 headers: {"Content-Type": "application/json"}, 
                                 body: JSON.stringify(updates) 
@@ -2818,7 +2904,7 @@ export default function Home() {
                                   TRIM START (ms)
                                   <input type="number" defaultValue={item.trim_start_ms} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ trim_start_ms: parseFloat(e.target.value) })
@@ -2830,7 +2916,7 @@ export default function Home() {
                                   TRIM END (ms)
                                   <input type="number" defaultValue={item.trim_end_ms} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ trim_end_ms: parseFloat(e.target.value) })
@@ -2842,7 +2928,7 @@ export default function Home() {
                                   CROSSFADE DURATION (ms)
                                   <input type="number" defaultValue={item.crossfade_duration_ms} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ crossfade_duration_ms: parseFloat(e.target.value) })
@@ -2858,7 +2944,7 @@ export default function Home() {
                                   FADE CURVE
                                   <select defaultValue={item.fade_curve || 'linear'}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ fade_curve: e.target.value })
@@ -2873,7 +2959,7 @@ export default function Home() {
                                   DUCKING (dB)
                                   <input type="number" step="0.5" max="0" defaultValue={item.duck_amount_db || 0.0} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ duck_amount_db: parseFloat(e.target.value) })
@@ -2885,7 +2971,7 @@ export default function Home() {
                                   EQ MODE
                                   <select defaultValue={item.eq_mode || 'none'}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ eq_mode: e.target.value })
@@ -2903,7 +2989,7 @@ export default function Home() {
                                   BPM SYNC
                                   <select defaultValue={item.sync_mode || 'auto'}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ sync_mode: e.target.value })
@@ -2918,7 +3004,7 @@ export default function Home() {
                                   PHRASE SNAP
                                   <select defaultValue={item.phrase_snap_override || ''}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, {
+                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ phrase_snap_override: e.target.value === '' ? null : e.target.value })
@@ -2981,7 +3067,7 @@ export default function Home() {
                                 </div>
                                 <button 
                                   onClick={() => {
-                                    fetch(`http://127.0.0.1:8000/api/playlist-items/${item.item_id}`, { method: 'DELETE' }).then(() => {
+                                    fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, { method: 'DELETE' }).then(() => {
                                       setSelectedItemId(null);
                                       loadPlaylistItems(activePlaylistId as number);
                                     });
@@ -2995,7 +3081,7 @@ export default function Home() {
                                 <button 
                                   onClick={() => {
                                     setIsSuggesting(true);
-                                    fetch(`http://127.0.0.1:8000/api/recommendations?base_youtube_url=${encodeURIComponent(item.youtube_url)}`)
+                                    fetch(`http://127.0.0.1:8765/api/recommendations?base_youtube_url=${encodeURIComponent(item.youtube_url)}`)
                                       .then(r => r.json())
                                       .then(data => {
                                         if(data.success) {
@@ -3044,7 +3130,7 @@ export default function Home() {
                                         </div>
                                         <button
                                           onClick={() => {
-                                            fetch(`http://127.0.0.1:8000/api/playlists/${activePlaylistId}/items`, {
+                                            fetch(`http://127.0.0.1:8765/api/playlists/${activePlaylistId}/items`, {
                                               method: "POST",
                                               headers: {"Content-Type": "application/json"},
                                               body: JSON.stringify({
@@ -3056,7 +3142,7 @@ export default function Home() {
                                             .then(data => {
                                               if(data.success && data.item_id) {
                                                 // Apply suggested transitions
-                                                fetch(`http://127.0.0.1:8000/api/playlist-items/${data.item_id}`, {
+                                                fetch(`http://127.0.0.1:8765/api/playlist-items/${data.item_id}`, {
                                                   method: "PUT",
                                                   headers: {"Content-Type": "application/json"},
                                                   body: JSON.stringify(rec.suggestion)

@@ -60,7 +60,7 @@ export default function ExportManager({
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/cloud/projects/${projectId}/export`, {
+      const res = await fetch(`http://localhost:8765/api/cloud/projects/${projectId}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

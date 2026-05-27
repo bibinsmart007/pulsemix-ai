@@ -25,7 +25,7 @@ export function usePresence(
     if (!projectId) return;
 
     try {
-      await fetch("http://localhost:8000/api/cloud/presence", {
+      await fetch("http://localhost:8765/api/cloud/presence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -37,7 +37,7 @@ export function usePresence(
         }),
       });
 
-      const res = await fetch(`http://localhost:8000/api/cloud/presence/${projectId}`);
+      const res = await fetch(`http://localhost:8765/api/cloud/presence/${projectId}`);
       const data = await res.json();
       if (data.success) {
         setActiveSessions(data.sessions);

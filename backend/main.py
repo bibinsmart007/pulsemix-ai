@@ -10,10 +10,10 @@ from typing import Optional, List, Dict, Any
 # Add current dir to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from extractor import resolve_youtube_audio
-from analyzer import analyze_audio
-from ai_engine import generate_mix_timeline
-from database import (
+from backend.extractor import resolve_youtube_audio
+from backend.analyzer import analyze_audio
+from backend.ai_engine import generate_mix_timeline
+from backend.database import (
     init_db, 
     get_db_connection, 
     get_track_metadata, 
@@ -47,10 +47,14 @@ from backend.stem_extractor import run_stem_extraction
 import uuid
 import time
 import threading
-from exporter import process_export_job, apply_custom_crossfade, apply_time_stretch
-from recommender import score_candidates, build_set_plan
+from backend.exporter import process_export_job, apply_custom_crossfade, apply_time_stretch
+from backend.recommender import score_candidates, build_set_plan
 from pydub import AudioSegment
 import re
+
+from arq import create_pool
+from arq.connections import RedisSettings
+from backend.jobs import create_job, get_job, update_job
 
 app = FastAPI(
     title="PulseMix AI Backend",
@@ -79,7 +83,7 @@ PREVIEWS_DIR = os.path.join(WORKSPACE_DIR, "public", "previews")
 os.makedirs(PREVIEWS_DIR, exist_ok=True)
 
 # Generate synthetic high-fidelity preset loop files if not present
-from synthesizer import generate_preset_library
+from backend.synthesizer import generate_preset_library
 try:
     if not os.path.exists(os.path.join(MUSIC_DIR, "lofi_raindrops.mp3")):
         generate_preset_library(MUSIC_DIR)
@@ -87,9 +91,19 @@ except Exception as e:
     print(f"[Backend] Failed to run preset loop synthesizer: {e}")
 
 # Initialize SQLite metadata database
-init_db()
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+    app.state.arq_pool = await create_pool(RedisSettings(host=REDIS_HOST, port=REDIS_PORT))
 
-# In-memory Job Queue for Background Processing
+@app.on_event("shutdown")
+async def shutdown_event():
+    if hasattr(app.state, 'arq_pool'):
+        await app.state.arq_pool.close()
+
+# In-memory Job Queue for Background Processing (Deprecated, keeping for legacy compatibility if any)
 import uuid
 import time
 import threading
@@ -285,7 +299,7 @@ def process_audio_job(job_id: str, url: str, force_reanalyze: bool = False):
 
 
 @app.post("/api/import")
-def import_track(req: ImportRequest, bg_tasks: BackgroundTasks):
+async def import_track(req: ImportRequest):
     """
     Endpoint to trigger async download and analysis of a YouTube track.
     Returns a job_id instantly for the client to poll.
@@ -300,9 +314,9 @@ def import_track(req: ImportRequest, bg_tasks: BackgroundTasks):
     print(f"[Backend] Received async import request for URL: {req.url}")
     
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {"status": "queued", "progress": 0.0}
+    create_job(job_id, "import_track", {"url": req.url})
     
-    bg_tasks.add_task(process_audio_job, job_id, req.url)
+    await app.state.arq_pool.enqueue_job('task_import_track', job_id, req.url)
     
     return {
         "success": True,
@@ -314,14 +328,15 @@ class StemExtractRequest(BaseModel):
     youtube_url: str
 
 @app.post("/api/stems/extract")
-def extract_stems(req: StemExtractRequest, bg_tasks: BackgroundTasks):
+async def extract_stems(req: StemExtractRequest):
     if not req.youtube_url:
         raise HTTPException(status_code=400, detail="YouTube URL required")
     
-    # We trigger the async extraction in background tasks so the request returns immediately
-    bg_tasks.add_task(run_stem_extraction, req.youtube_url)
+    job_id = str(uuid.uuid4())
+    create_job(job_id, "extract_stems", {"youtube_url": req.youtube_url})
+    await app.state.arq_pool.enqueue_job('task_extract_stems', job_id, req.youtube_url)
     
-    return {"success": True, "status": "queued", "youtube_url": req.youtube_url}
+    return {"success": True, "status": "queued", "job_id": job_id, "youtube_url": req.youtube_url}
 
 @app.get("/api/stems/status")
 def get_stem_status(youtube_url: str):
@@ -346,6 +361,11 @@ def get_library():
     """Endpoint to retrieve historically analyzed tracks from SQLite."""
     try:
         tracks = get_all_tracks()
+        from backend.storage import get_storage
+        storage = get_storage()
+        for t in tracks:
+            if t.get("filepath") and not t["filepath"].startswith("http") and not t["filepath"].startswith("/downloads/"):
+                t["url"] = storage.generate_access_url(t["filepath"])
         return {"success": True, "tracks": tracks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -471,6 +491,11 @@ def api_get_playlist_items(playlist_id: int, auto_phrase_snap: bool = True):
     try:
         items = get_playlist_items(playlist_id)
         resolved_items = [resolve_snapped_boundaries(item, auto_phrase_snap) for item in items]
+        from backend.storage import get_storage
+        storage = get_storage()
+        for item in resolved_items:
+            if item.get("filepath") and not item["filepath"].startswith("http") and not item["filepath"].startswith("/downloads/"):
+                item["url"] = storage.generate_access_url(item["filepath"])
         return {"success": True, "items": resolved_items}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1589,9 +1614,15 @@ def api_delete_playlist_item(item_id: int):
 @app.get("/api/status/{job_id}")
 def get_job_status(job_id: str):
     """Polling endpoint for track import status."""
-    if job_id not in jobs:
+    job = get_job(job_id)
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return jobs[job_id]
+    # For backwards compatibility with frontend expecting track inside job directly
+    if job.get("result_key") and job.get("status") in ("completed", "ready", "from_cache"):
+        from backend.storage import get_storage
+        url = get_storage().generate_access_url(job["result_key"])
+        job["track"] = {"filepath": url}
+    return job
 
 class ExportRequest(BaseModel):
     playlist_id: int
@@ -1600,7 +1631,7 @@ class ExportRequest(BaseModel):
     auto_phrase_snap: Optional[bool] = True
 
 @app.post("/api/export")
-def create_export(req: ExportRequest, bg_tasks: BackgroundTasks):
+async def create_export(req: ExportRequest):
     items = get_playlist_items(req.playlist_id)
     if not items:
         raise HTTPException(status_code=400, detail="Cannot export an empty playlist")
@@ -1610,14 +1641,21 @@ def create_export(req: ExportRequest, bg_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Playlist contains no valid or resolvable tracks to export")
         
     job_id = f"{uuid.uuid4()}"
-    settings = json.dumps({"source": "playlist", "master_bus_mode": req.master_bus_mode, "export_name": req.export_name, "auto_phrase_snap": req.auto_phrase_snap})
-    create_export_job(job_id, req.playlist_id, settings)
-    bg_tasks.add_task(process_export_job, job_id, req.playlist_id, "Playlist", req.master_bus_mode, req.export_name, req.auto_phrase_snap)
+    settings = {"source": "playlist", "master_bus_mode": req.master_bus_mode, "export_name": req.export_name, "auto_phrase_snap": req.auto_phrase_snap}
+    create_job(job_id, "create_export", settings)
+    create_export_job(job_id, req.playlist_id, json.dumps(settings))
+    
+    await app.state.arq_pool.enqueue_job('task_create_export', job_id, req.playlist_id, req.export_name, req.master_bus_mode, req.auto_phrase_snap)
     
     return {"success": True, "job_id": job_id}
 @app.get("/api/export")
 def get_all_export_jobs():
     exports = get_all_exports()
+    from backend.storage import get_storage
+    storage = get_storage()
+    for e in exports:
+        if e.get("file_path") and not str(e["file_path"]).startswith("http") and not str(e["file_path"]).startswith("/exports/"):
+            e["file_path"] = storage.generate_access_url(e["file_path"])
     # Limit to max 10
     return {"success": True, "jobs": exports[:10]}
 
@@ -1626,14 +1664,45 @@ def get_latest_export():
     exports = get_all_exports()
     if not exports:
         return {"success": True, "job": None}
-    return {"success": True, "job": exports[0]}
+    
+    from backend.storage import get_storage
+    storage = get_storage()
+    job = exports[0]
+    if job.get("file_path") and not str(job["file_path"]).startswith("http") and not str(job["file_path"]).startswith("/exports/"):
+        job["file_path"] = storage.generate_access_url(job["file_path"])
+        
+    return {"success": True, "job": job}
 
 @app.get("/api/export/{job_id}")
 def get_export_status(job_id: str):
     job = get_export_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Export job not found")
+        
+    from backend.storage import get_storage
+    storage = get_storage()
+    if job.get("file_path") and not str(job["file_path"]).startswith("http") and not str(job["file_path"]).startswith("/exports/"):
+        job["file_path"] = storage.generate_access_url(job["file_path"])
+        
     return {"success": True, "job": job}
+
+@app.get("/api/admin/jobs")
+def api_admin_jobs():
+    """Admin endpoint to inspect all ARQ-backed jobs in SQLite."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM jobs ORDER BY updated_at DESC LIMIT 100")
+    jobs_list = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    for j in jobs_list:
+        if j.get("payload_json"):
+            import json
+            try:
+                j["payload"] = json.loads(j["payload_json"])
+            except:
+                pass
+    return {"success": True, "jobs": jobs_list}
 
 @app.get("/api/inventory")
 def get_inventory():
@@ -1641,6 +1710,12 @@ def get_inventory():
     List all pre-curated high-fidelity demonstration tracks.
     """
     tracks = get_all_tracks()
+    from backend.storage import get_storage
+    storage = get_storage()
+    for t in tracks:
+        if t.get("filepath") and not str(t["filepath"]).startswith("http") and not str(t["filepath"]).startswith("/downloads/"):
+            t["url"] = storage.generate_access_url(t["filepath"])
+            
     return {
         "count": len(tracks),
         "tracks": tracks
@@ -2337,7 +2412,7 @@ def api_ai_generate(req: AIGenerateRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8765)
 # ==========================================
 # Phase 35: AI Sessions
 # ==========================================

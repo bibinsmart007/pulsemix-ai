@@ -48,6 +48,19 @@ def generate_mix_timeline(prompt: str, tracks: list) -> dict:
     
     key_a = track_a.get("key", "Unknown")
     key_b = track_b.get("key", "Unknown")
+    
+    import json
+    def get_cues(track):
+        try:
+            return [c for c in json.loads(track.get("hot_cues", "[]")) if c is not None]
+        except:
+            return []
+            
+    cues_a = get_cues(track_a)
+    cues_b = get_cues(track_b)
+    
+    mix_out_time = cues_a[-1] if cues_a else 0
+    mix_in_time = cues_b[0] if cues_b else 0
 
     all_transitions = ["echo-out", "bass-swap", "reverb-blend", "edm-rise", "fade"]
 
@@ -91,7 +104,8 @@ def generate_mix_timeline(prompt: str, tracks: list) -> dict:
 
         # 4. Generate Rationale
         exp = f"Selected {strategy} strategy. "
-        exp += f"Synchronized to {t_bpm} BPM. Applying '{trans_type}' transition."
+        exp += f"Mix out around {int(mix_out_time)}s into Track B at {int(mix_in_time)}s. "
+        exp += f"Applying '{trans_type}' transition."
 
         alts = [t for t in all_transitions if t != trans_type][:3]
         
@@ -108,7 +122,9 @@ def generate_mix_timeline(prompt: str, tracks: list) -> dict:
             "overall_score": overall_score,
             "confidence_tier": tier,
             "attributes": attrs,
-            "key_relationship": "perfect" if harmonic_score == 100 else "compatible"
+            "key_relationship": "perfect" if harmonic_score == 100 else "compatible",
+            "mix_out_time": mix_out_time,
+            "mix_in_time": mix_in_time
         }
 
     # Primary Variation

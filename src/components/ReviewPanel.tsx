@@ -55,8 +55,8 @@ export default function ReviewPanel({
     if (!currentVersionId) return;
     try {
       const [cRes, tRes] = await Promise.all([
-        fetch(`http://localhost:8000/api/cloud/versions/${currentVersionId}/comments`).then(r => r.json()),
-        fetch(`http://localhost:8000/api/cloud/versions/${currentVersionId}/tasks`).then(r => r.json())
+        fetch(`http://localhost:8765/api/cloud/versions/${currentVersionId}/comments`).then(r => r.json()),
+        fetch(`http://localhost:8765/api/cloud/versions/${currentVersionId}/tasks`).then(r => r.json())
       ]);
       if (cRes.success) setLocalComments(cRes.comments);
       if (tRes.success) setLocalTasks(tRes.tasks);
@@ -76,7 +76,7 @@ export default function ReviewPanel({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() || !currentVersionId) return;
-    await fetch(`http://localhost:8000/api/cloud/versions/${currentVersionId}/comments`, {
+    await fetch(`http://localhost:8765/api/cloud/versions/${currentVersionId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -92,13 +92,13 @@ export default function ReviewPanel({
   };
 
   const handleResolveComment = async (commentId: number) => {
-    await fetch(`http://localhost:8000/api/cloud/comments/${commentId}/resolve`, { method: "PUT" });
+    await fetch(`http://localhost:8765/api/cloud/comments/${commentId}/resolve`, { method: "PUT" });
     await loadData();
   };
 
   const handleCreateTask = async (commentId: number, title: string) => {
     if (!currentVersionId) return;
-    await fetch(`http://localhost:8000/api/cloud/versions/${currentVersionId}/tasks`, {
+    await fetch(`http://localhost:8765/api/cloud/versions/${currentVersionId}/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -112,7 +112,7 @@ export default function ReviewPanel({
   };
 
   const handleUpdateTask = async (taskId: number, updates: any) => {
-    await fetch(`http://localhost:8000/api/cloud/tasks/${taskId}`, {
+    await fetch(`http://localhost:8765/api/cloud/tasks/${taskId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates)

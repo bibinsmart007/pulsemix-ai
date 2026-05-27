@@ -9,6 +9,35 @@ def get_db_connection():
 
 ANALYSIS_VERSION = "1.0" # Bump this if extraction logic changes significantly
 
+def save_analysis(youtube_url: str, analysis: dict):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE tracks 
+        SET bpm = ?, raw_bpm = ?, key_signature = ?, key_camelot = ?,
+            waveform_data = ?, analysis_version = ?, analysis_status = ?,
+            bpm_confidence = ?, key_confidence = ?, beatgrid = ?,
+            phrase_markers = ?, downbeat_confidence = ?, hot_cues = ?
+        WHERE youtube_url = ?
+    """, (
+        analysis.get("bpm"),
+        analysis.get("raw_bpm"),
+        analysis.get("key"),
+        analysis.get("key_camelot"),
+        analysis.get("waveform_data"),
+        ANALYSIS_VERSION,
+        "completed",
+        analysis.get("bpm_confidence"),
+        analysis.get("key_confidence"),
+        analysis.get("beatgrid"),
+        analysis.get("phrase_markers"),
+        analysis.get("downbeat_confidence"),
+        analysis.get("hot_cues"),
+        youtube_url
+    ))
+    conn.commit()
+    conn.close()
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -38,6 +67,7 @@ def init_db():
             key_camelot TEXT,
             beatgrid TEXT,
             phrase_markers TEXT,
+            hot_cues TEXT,
             downbeat_confidence REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -83,6 +113,16 @@ def init_db():
         
     try:
         cursor.execute("ALTER TABLE tracks ADD COLUMN downbeat_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tracks ADD COLUMN hot_cues TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE sync_history ADD COLUMN hot_cues TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -467,6 +507,32 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+
+    # Phase 60 Migrations
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS jobs (
+            job_id TEXT PRIMARY KEY,
+            job_type TEXT NOT NULL,
+            payload_json TEXT,
+            status TEXT DEFAULT 'queued',
+            progress INTEGER DEFAULT 0,
+            error TEXT,
+            result_key TEXT,
+            lease_token TEXT,
+            worker_id TEXT,
+            started_at REAL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )
+    """)
+    
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN payload_json TEXT")
+        cursor.execute("ALTER TABLE jobs ADD COLUMN lease_token TEXT")
+        cursor.execute("ALTER TABLE jobs ADD COLUMN worker_id TEXT")
+        cursor.execute("ALTER TABLE jobs ADD COLUMN started_at REAL")
+    except sqlite3.OperationalError:
+        pass
 
     # Inject a known row for the cache verification snapshot
     cursor.execute("""

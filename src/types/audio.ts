@@ -14,6 +14,10 @@ export interface TrackMetadata {
   drums_path?: string;
   bass_path?: string;
   other_path?: string;
+  bpm_confidence?: number;
+  key_confidence?: number;
+  downbeat_confidence?: number;
+  hot_cues?: string;
 }
 
 export interface DeckState {
@@ -38,6 +42,7 @@ export interface DeckState {
   };
   title: string;
   youtube_url?: string;
+  audioUrl?: string;
   stem_status?: StemStatus;
   thumbnail: string;
   trackLoaded: boolean;
@@ -47,6 +52,7 @@ export interface DeckState {
   loopStart: number | null;
   loopEnd: number | null;
   loopActive: boolean;
+  beatgrid?: string;
 }
 
 export const initialDeckState = (title: string): DeckState => ({
@@ -71,6 +77,7 @@ export const initialDeckState = (title: string): DeckState => ({
   },
   title,
   youtube_url: undefined,
+  audioUrl: undefined,
   stem_status: "NOT_GENERATED",
   thumbnail: "",
   trackLoaded: false,

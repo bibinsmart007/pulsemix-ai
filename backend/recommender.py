@@ -55,6 +55,16 @@ def score_candidates(base_track: Dict[str, Any], library: List[Dict[str, Any]]) 
     base_bpm = base_track.get("bpm")
     base_key = base_track.get("key_signature")
     base_status = base_track.get("analysis_status", "pending")
+    base_downbeat_conf = base_track.get("downbeat_confidence", 1.0)
+    
+    import json
+    def get_cues(track):
+        try:
+            return [c for c in json.loads(track.get("hot_cues", "[]")) if c is not None]
+        except:
+            return []
+            
+    base_cues = get_cues(base_track)
     
     for target in library:
         if target["youtube_url"] == base_track["youtube_url"]:
@@ -115,28 +125,44 @@ def score_candidates(base_track: Dict[str, Any], library: List[Dict[str, Any]]) 
             "fade_curve": "equal_power",
             "eq_mode": "none",
             "crossfade_duration_ms": 2000,
-            "duck_amount_db": 0.0
+            "duck_amount_db": 0.0,
+            "mix_out_time": base_cues[-1] if base_cues else 0,
+            "mix_in_time": 0
         }
+        
+        target_cues = get_cues(target)
+        if target_cues:
+            suggestion["mix_in_time"] = target_cues[0]
+            
+        target_downbeat_conf = target.get("downbeat_confidence", 1.0)
+        
+        is_edm_blend = base_downbeat_conf < 0.3 and target_downbeat_conf < 0.3
         
         if diff_pct <= 2.0:
             suggestion["sync_mode"] = "off"
-            suggestion["crossfade_duration_ms"] = 4000
+            suggestion["crossfade_duration_ms"] = 16000 if is_edm_blend else 8000
             suggestion["eq_mode"] = "smooth_blend"
             score += 10 # Ideal condition
-            reasons.append("Ideal for Smooth Blend")
+            if is_edm_blend:
+                reasons.append("8-Bar Phrase Boundary (EDM Blend)")
+            else:
+                reasons.append("Ideal for Smooth Blend")
         elif diff_pct <= 8.0:
             suggestion["sync_mode"] = "auto"
-            suggestion["crossfade_duration_ms"] = 2000
+            suggestion["crossfade_duration_ms"] = 8000 if is_edm_blend else 4000
             suggestion["duck_amount_db"] = -3.0
             suggestion["eq_mode"] = "bass_swap"
             score += 5
-            reasons.append("Ideal for Bass Swap")
+            if is_edm_blend:
+                reasons.append("Energy-Compatible Bass Swap (4-Bar)")
+            else:
+                reasons.append("Ideal for Bass Swap")
         else:
             suggestion["sync_mode"] = "off" # Too much stretch, disable sync
             suggestion["fade_curve"] = "linear"
             suggestion["crossfade_duration_ms"] = 1000
             suggestion["eq_mode"] = "soft_exit"
-            reasons.append("Requires Hard Cut / Soft Exit")
+            reasons.append("Tempo Clash: Hard Cut / Soft Exit Recommended")
             
         candidates.append({
             "track": target,

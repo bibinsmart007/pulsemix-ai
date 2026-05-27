@@ -7,11 +7,13 @@ export function useTimelinePlayback(audioEngine: any, positionedBlocks: any[]) {
   const [activeBoundaryItem, setActiveBoundaryItem] = useState<number | null>(null);
   
   const lastTimeRef = useRef<number>(0);
+  const lastRenderTimeRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
 
   const startPlayback = () => {
     setIsPlayingGlobal(true);
     lastTimeRef.current = performance.now();
+    lastRenderTimeRef.current = performance.now();
   };
 
   const pausePlayback = () => {
@@ -25,8 +27,15 @@ export function useTimelinePlayback(audioEngine: any, positionedBlocks: any[]) {
     if (!isPlayingGlobal) return;
 
     const loop = (time: number) => {
+      // Throttle to ~30fps (approx 33ms)
+      if (time - lastRenderTimeRef.current < 33) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      
       const deltaMs = time - lastTimeRef.current;
       lastTimeRef.current = time;
+      lastRenderTimeRef.current = time;
       
       setGlobalTimeMs(prev => {
         const nextTime = prev + deltaMs;
@@ -168,8 +177,8 @@ export function useTimelinePlayback(audioEngine: any, positionedBlocks: any[]) {
     setGlobalTimeMs(startTimeMs);
     
     // Load tracks
-    await audioEngine.loadTrack(deckOutgoing, `http://127.0.0.1:8000/media/${outgoingBlock.youtube_url.replace('https://www.youtube.com/watch?v=', '')}.mp3`, outgoingBlock.title, outgoingBlock.bpm, outgoingBlock.key_signature);
-    await audioEngine.loadTrack(deckIncoming, `http://127.0.0.1:8000/media/${incomingBlock.youtube_url.replace('https://www.youtube.com/watch?v=', '')}.mp3`, incomingBlock.title, incomingBlock.bpm, incomingBlock.key_signature);
+    await audioEngine.loadTrack(deckOutgoing, `http://127.0.0.1:8765/media/${outgoingBlock.youtube_url.replace('https://www.youtube.com/watch?v=', '')}.mp3`, outgoingBlock.title, outgoingBlock.bpm, outgoingBlock.key_signature);
+    await audioEngine.loadTrack(deckIncoming, `http://127.0.0.1:8765/media/${incomingBlock.youtube_url.replace('https://www.youtube.com/watch?v=', '')}.mp3`, incomingBlock.title, incomingBlock.bpm, incomingBlock.key_signature);
     
     // Apply sync if enabled
     if (incomingBlock.sync_mode === "auto" && outgoingBlock.bpm && incomingBlock.bpm) {

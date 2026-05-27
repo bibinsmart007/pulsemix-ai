@@ -25,7 +25,7 @@ export default function SharedProjectViewer({
 
   useEffect(() => {
     if (isReviewMode && sharedProject && isActivityPanelOpen) {
-      fetch(`http://localhost:8000/api/cloud/projects/${sharedProject.id}/activity`)
+      fetch(`http://localhost:8765/api/cloud/projects/${sharedProject.id}/activity`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {

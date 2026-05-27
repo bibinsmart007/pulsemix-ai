@@ -11,7 +11,7 @@ export function ProjectHealthDashboard({ projectId, onClose }: ProjectHealthDash
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/cloud/projects/${projectId}/health`)
+    fetch(`http://localhost:8765/api/cloud/projects/${projectId}/health`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {

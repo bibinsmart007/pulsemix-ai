@@ -15,6 +15,121 @@ import array
 EXPORT_DIR = os.path.join(os.path.dirname(__file__), "..", "public", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
+# --- Loudness normalization (real, replaces fake time.sleep block) -----------
+# Mapping of master_bus_mode -> integrated LUFS target.
+# Safe = streaming/headphone standard. Balanced = party PA loud-but-clean.
+# Loud = max party loud (slight compression risk on already-hot tracks).
+MASTER_BUS_TARGETS = {
+    "Safe":     {"lufs": -14.0, "peak_ceiling_dbfs": -1.0},
+    "Balanced": {"lufs": -10.0, "peak_ceiling_dbfs": -1.0},
+    "Loud":     {"lufs":  -7.0, "peak_ceiling_dbfs": -0.5},
+}
+
+def _audiosegment_to_float_array(seg: AudioSegment) -> np.ndarray:
+    """Convert pydub AudioSegment to float32 numpy array shape (samples, channels), range -1..1."""
+    samples = np.array(seg.get_array_of_samples())
+    if seg.channels == 2:
+        samples = samples.reshape((-1, 2))
+    max_val = float(1 << (8 * seg.sample_width - 1))  # e.g. 32768 for 16-bit
+    return samples.astype(np.float32) / max_val
+
+def _float_array_to_audiosegment(arr: np.ndarray, template: AudioSegment) -> AudioSegment:
+    """Inverse of _audiosegment_to_float_array. Preserves sample rate and bit depth of template."""
+    max_val = float(1 << (8 * template.sample_width - 1))
+    clipped = np.clip(arr, -1.0, 1.0)
+    int_arr = (clipped * max_val).astype(np.int16 if template.sample_width == 2 else np.int32)
+    if template.channels == 2 and int_arr.ndim == 2:
+        int_arr = int_arr.flatten()
+    return AudioSegment(
+        int_arr.tobytes(),
+        frame_rate=template.frame_rate,
+        sample_width=template.sample_width,
+        channels=template.channels,
+    )
+
+def normalize_loudness(mix: AudioSegment, master_bus_mode: str = "Balanced") -> tuple:
+    """
+    Normalize a rendered mix to a target integrated LUFS with a peak ceiling.
+    Returns (normalized_AudioSegment, metadata_dict).
+
+    Critical for parties on a PA: ensures old Malayalam classics (~-20 LUFS)
+    and modern Bollywood (~-7 LUFS) come out at consistent listening volume.
+    """
+    cfg = MASTER_BUS_TARGETS.get(master_bus_mode, MASTER_BUS_TARGETS["Balanced"])
+    target_lufs = cfg["lufs"]
+    peak_ceiling_dbfs = cfg["peak_ceiling_dbfs"]
+
+    try:
+        import pyloudnorm as pyln
+    except ImportError:
+        print("[Exporter] pyloudnorm not installed — skipping loudness normalization. "
+              "Run: pip install pyloudnorm")
+        return mix, {
+            "mode": master_bus_mode, "peak_reduction_db": 0.0,
+            "final_lufs": None, "applied_gain_db": 0.0,
+            "warning": "pyloudnorm missing"
+        }
+
+    audio_f = _audiosegment_to_float_array(mix)  # shape (N, ch) or (N,)
+    sr = mix.frame_rate
+
+    # pyloudnorm wants shape (samples, channels) or 1D mono
+    meter = pyln.Meter(sr)
+    try:
+        measured_lufs = float(meter.integrated_loudness(audio_f))
+    except ValueError as e:
+        # Track too short for K-weighting (<400ms). Skip normalization.
+        print(f"[Exporter] Loudness measure failed ({e}); skipping normalization.")
+        return mix, {
+            "mode": master_bus_mode, "peak_reduction_db": 0.0,
+            "final_lufs": None, "applied_gain_db": 0.0,
+            "warning": "audio too short to measure"
+        }
+
+    if measured_lufs == float("-inf") or np.isnan(measured_lufs):
+        # Effectively silent.
+        return mix, {
+            "mode": master_bus_mode, "peak_reduction_db": 0.0,
+            "final_lufs": measured_lufs, "applied_gain_db": 0.0,
+            "warning": "silent input"
+        }
+
+    gain_db = target_lufs - measured_lufs
+    gain_linear = 10.0 ** (gain_db / 20.0)
+    normalized = audio_f * gain_linear
+
+    # Peak-ceiling protection: if applying LUFS gain would push peaks above ceiling, scale back.
+    current_peak = float(np.max(np.abs(normalized))) if normalized.size else 0.0
+    ceiling_linear = 10.0 ** (peak_ceiling_dbfs / 20.0)
+    peak_reduction_db = 0.0
+    if current_peak > ceiling_linear and current_peak > 0:
+        peak_scale = ceiling_linear / current_peak
+        normalized = normalized * peak_scale
+        peak_reduction_db = 20.0 * math.log10(peak_scale)
+
+    final_peak = float(np.max(np.abs(normalized))) if normalized.size else 0.0
+    final_peak_dbfs = 20.0 * math.log10(final_peak) if final_peak > 0 else float("-inf")
+    final_lufs_estimate = measured_lufs + gain_db + peak_reduction_db
+
+    out_seg = _float_array_to_audiosegment(normalized, mix)
+
+    print(f"[Exporter] Loudness norm: measured={measured_lufs:.2f} LUFS, "
+          f"target={target_lufs:.2f} LUFS, gain={gain_db:+.2f} dB, "
+          f"peak_reduction={peak_reduction_db:.2f} dB, "
+          f"final_peak={final_peak_dbfs:.2f} dBFS")
+
+    return out_seg, {
+        "mode": master_bus_mode,
+        "target_lufs": target_lufs,
+        "measured_lufs": round(measured_lufs, 2),
+        "final_lufs": round(final_lufs_estimate, 2),
+        "applied_gain_db": round(gain_db, 2),
+        "peak_reduction_db": round(peak_reduction_db, 2),
+        "final_peak_dbfs": round(final_peak_dbfs, 2) if final_peak > 0 else None,
+        "peak_ceiling_dbfs": peak_ceiling_dbfs,
+    }
+# -----------------------------------------------------------------------------
+
 def apply_time_stretch(seg: AudioSegment, stretch_ratio: float) -> AudioSegment:
     if stretch_ratio == 1.0 or stretch_ratio <= 0:
         return seg
@@ -199,10 +314,28 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
             source_type = "preset" if preset and preset != "manual" else ("snapped" if is_snapped else "raw")
             timing_sources.add(source_type)
                 
-            filepath = item.get("filepath")
-            if not filepath or not os.path.exists(filepath):
-                print(f"[Exporter] Warning: Track {item.get('title')} file missing. Skipping.")
+            filepath_key = item.get("filepath")
+            if not filepath_key:
+                print(f"[Exporter] Warning: Track {item.get('title')} has no filepath. Skipping.")
                 continue
+                
+            from backend.storage import get_storage
+            storage = get_storage()
+            
+            # If it's a local mock/download that wasn't uploaded, it might be an absolute path
+            # But normally it's an object key like "music/xyz.mp3"
+            if not storage.exists(filepath_key) and not os.path.exists(filepath_key):
+                print(f"[Exporter] Warning: Track {item.get('title')} file missing in storage. Skipping.")
+                continue
+                
+            temp_dir = os.path.join(os.path.dirname(__file__), "..", "public", "temp_export")
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            filepath = os.path.join(temp_dir, os.path.basename(filepath_key))
+            if storage.exists(filepath_key):
+                storage.download_file(filepath_key, filepath)
+            else:
+                filepath = filepath_key # fallback to local file if it was absolute path
                 
             try:
                 # Load track audio
@@ -229,8 +362,17 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                     # Load stems
                     base_filename = item.get("youtube_url", "").replace("https://www.youtube.com/watch?v=", "")
                     stems_dir = os.path.join(os.path.dirname(filepath), f"{base_filename}_stems")
+                    os.makedirs(stems_dir, exist_ok=True)
+                    
+                    stems_dir_key = f"music/{base_filename}_stems"
                     
                     try:
+                        for stem in ["vocals", "drums", "bass", "other"]:
+                            stem_key = f"{stems_dir_key}/{stem}.wav"
+                            local_stem = os.path.join(stems_dir, f"{stem}.wav")
+                            if storage.exists(stem_key):
+                                storage.download_file(stem_key, local_stem)
+                        
                         track_stems["vocals"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "vocals.wav")), start_ms, end_ms)
                         track_stems["drums"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "drums.wav")), start_ms, end_ms)
                         track_stems["bass"] = trim_audio(AudioSegment.from_file(os.path.join(stems_dir, "bass.wav")), start_ms, end_ms)
@@ -303,7 +445,7 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
             except Exception as e:
                 print(f"[Exporter] Failed to load track {filepath}: {e}")
                 is_fallback = True
-                
+
                 # Create a fallback tone
                 from pydub.generators import Sine
                 fallback_audio = Sine(440 + (i * 100)).to_audio_segment(duration=5000)
@@ -314,14 +456,14 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                     "bass": silent,
                     "other": fallback_audio
                 }
-                
+
                 xfade = int(item.get("crossfade_duration_ms", 1000))
-                
+
                 if len(mix_stems["other"]) == 0:
                     mix_stems = track_stems
                 else:
                     mix_stems = apply_stem_crossfade_parallel(mix_stems, track_stems, xfade)
-                
+
                 transitions_applied.append({
                     "boundary": i,
                     "curve": "fallback_linear",
@@ -333,41 +475,36 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                 })
 
         update_export_status(job_id, "rendering", 70)
-        
+
         # Combine stems into final mix
         mix = mix_stems["other"].overlay(mix_stems["vocals"]).overlay(mix_stems["drums"]).overlay(mix_stems["bass"])
-        
-        # Simulate Master Bus Processing
-        import time
-        time.sleep(1.5)
-        
-        if master_bus_mode == "Safe":
-            master_meta = {"mode": "Safe", "peak_reduction_db": -1.2, "final_lufs": -14.1}
-        elif master_bus_mode == "Loud":
-            master_meta = {"mode": "Loud", "peak_reduction_db": -6.1, "final_lufs": -5.9}
-        else: # Balanced
-            master_meta = {"mode": "Balanced", "peak_reduction_db": -3.5, "final_lufs": -9.8}
-        
+
+        # Real master bus loudness normalization (replaces the prior fake time.sleep block).
+        # Brings the final mix to a consistent LUFS target with peak-ceiling protection.
+        # Critical for parties: keeps Bollywood/Western/Arabic/Malayalam at uniform listening volume.
+        update_export_status(job_id, "rendering", 80)
+        mix, master_meta = normalize_loudness(mix, master_bus_mode)
+
         update_export_status(job_id, "rendering", 90)
-        
+
         # Generate export package
         import zipfile
         import json
         import datetime
         import shutil
-        
+
         job_dir = os.path.join(EXPORT_DIR, job_id)
         os.makedirs(job_dir, exist_ok=True)
-        
+
         wav_path = os.path.join(job_dir, "mix.wav")
         mix.export(wav_path, format="wav")
-        
-        # We need to sanitize items for JSON (remove any non-serializable stuff, though it should be dicts)
+
+        # Sanitize items for JSON (they should already be dicts)
         sanitized_items = []
         for it in items:
             s_it = dict(it)
             sanitized_items.append(s_it)
-            
+
         manifest_data = {
             "job_id": job_id,
             "export_name": export_name,
@@ -380,7 +517,7 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
         manifest_path = os.path.join(job_dir, "manifest.json")
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump(manifest_data, f, indent=2)
-            
+
         tracklist_path = os.path.join(job_dir, "tracklist.txt")
         with open(tracklist_path, "w", encoding="utf-8") as f:
             f.write(f"Tracklist: {export_name}\n")
@@ -392,20 +529,22 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
                     snap_text = f" | {t['snapped_reason']}" if t.get('snapped_reason') else " | Manual retained"
                     f.write(f"   -> [Transition] {t['eq_mode']} | {t['duration_ms']}ms | {t['curve']}{snap_text}\n")
                 f.write("\n")
-                
+
         zip_filename = f"{job_id}.zip"
         zip_path = os.path.join(EXPORT_DIR, zip_filename)
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.write(wav_path, "mix.wav")
             zf.write(manifest_path, "manifest.json")
             zf.write(tracklist_path, "tracklist.txt")
-            
+
         # Clean up temp dir
         shutil.rmtree(job_dir, ignore_errors=True)
-        
-        download_url = f"/exports/{zip_filename}"
+        # also the downloaded stem/track dir
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+        download_url = f"exports/{job_id}.zip" # Just store the object_key
         update_export_status(job_id, "completed", 100, download_url)
-        
+
         meta_updates = {
             "master_bus": master_meta,
             "total_items": len(items),
@@ -415,9 +554,9 @@ def process_export_job(job_id: str, playlist_id: int, playlist_name: str, master
         }
         if is_fallback:
             meta_updates["note"] = "Used mock audio due to missing source files."
-            
+
         update_export_metadata(job_id, meta_updates)
-        
+
     except Exception as e:
         import traceback
         traceback.print_exc()

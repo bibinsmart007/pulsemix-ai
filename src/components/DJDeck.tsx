@@ -8,7 +8,6 @@ import { PerformanceCard } from "./PerformanceCard";
 interface DJDeckProps {
   deckId: "A" | "B";
   state: DeckState;
-  audioElem: HTMLAudioElement | null;
   onPlay: () => void;
   onPause: () => void;
   onCue: () => void;
@@ -26,10 +25,15 @@ interface DJDeckProps {
   onVolumeChange: (volume: number) => void;
   onToggleCue: () => void;
   onExtractStems: () => void;
+  getCurrentTime: () => number;
 }
 
-// Sub-Component: Timer Card
-function TimerCard({ currentTime, duration, accentColor }: { currentTime: number, duration: number, accentColor: string }) {
+// Sub-Component: TimerCard handles its own requestAnimationFrame loop
+function TimerCard({ getCurrentTime, duration, accentColor }: { getCurrentTime: () => number, duration: number, accentColor: string }) {
+  const timeRef = useRef<HTMLDivElement>(null);
+  const remainingRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+
   const formatTime = (timeInSecs: number) => {
     if (isNaN(timeInSecs) || timeInSecs <= 0) return "00:00.0";
     const mins = Math.floor(timeInSecs / 60);
@@ -38,16 +42,33 @@ function TimerCard({ currentTime, duration, accentColor }: { currentTime: number
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms}`;
   };
 
+  useEffect(() => {
+    const tick = () => {
+      const currentTime = getCurrentTime();
+      if (timeRef.current) {
+        timeRef.current.textContent = formatTime(currentTime);
+      }
+      if (remainingRef.current) {
+        remainingRef.current.textContent = "-" + formatTime(Math.max(0, duration - currentTime));
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [getCurrentTime, duration]);
+
   return (
     <article className="flex flex-col items-end justify-center bg-[#050508] px-5 py-4 rounded-xl border border-white/10 shadow-[inset_0_4px_15px_rgba(0,0,0,0.8)] min-w-[150px]">
       <header className="sr-only">
         <h2>Deck Timer</h2>
       </header>
-      <div className={`text-4xl font-light font-mono tracking-tight ${accentColor} drop-shadow-[0_0_10px_currentColor]`}>
-        {formatTime(currentTime)}
+      <div ref={timeRef} className={`text-4xl font-light font-mono tracking-tight ${accentColor} drop-shadow-[0_0_10px_currentColor]`}>
+        00:00.0
       </div>
-      <div className="text-[11px] text-neutral-500 font-mono tracking-widest mt-1 font-bold">
-        -{formatTime(Math.max(0, duration - currentTime))}
+      <div ref={remainingRef} className="text-[11px] text-neutral-500 font-mono tracking-widest mt-1 font-bold">
+        -00:00.0
       </div>
     </article>
   );
@@ -232,9 +253,9 @@ function ControlsCard({
 }
 
 export default function DJDeck({
-  deckId, state, audioElem, onPlay, onPause, onCue, onSeek, onBpmChange, onPitchChange,
+  deckId, state, onPlay, onPause, onCue, onSeek, onBpmChange, onPitchChange,
   onSync, onVinylStop, onSetHotCue, onTriggerHotCue, onToggleLoop, onFileDrop,
-  onEqChange, onFilterChange, onVolumeChange, onToggleCue, onExtractStems
+  onEqChange, onFilterChange, onVolumeChange, onToggleCue, onExtractStems, getCurrentTime
 }: DJDeckProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const isA = deckId === "A";
@@ -250,15 +271,13 @@ export default function DJDeck({
 
   // Initialize and update Wavesurfer instance
   useEffect(() => {
-    if (typeof window === "undefined" || !state.trackLoaded || !audioElem) return;
+    if (typeof window === "undefined" || !state.trackLoaded || !state.audioUrl) return;
 
     let ws: any = null;
     let regions: any = null;
     
     const container = document.querySelector(`#waveform-${deckId}`);
     if (container) {
-      // WaveSurfer handles clearing its own container on destroy()
-      
       Promise.all([
         import("wavesurfer.js"),
         import("wavesurfer.js/dist/plugins/regions.esm.js")
@@ -268,17 +287,20 @@ export default function DJDeck({
         
         ws = WaveSurfer.default.create({
           container: `#waveform-${deckId}`,
-          media: audioElem,
+          url: state.audioUrl, // Fetch and render visually
           waveColor: waveColor,
           progressColor: progressColor,
           cursorColor: cursorColor,
           cursorWidth: 2,
-          height: 94, // slightly less than container h-24
+          height: 94,
           barWidth: 2,
           barGap: 1.5,
           interact: true,
           plugins: [regions],
         });
+        
+        // Mute the internal audio so our Web Audio engine is the only sound source
+        ws.setVolume(0);
         
         ws.on('interaction', (newTime: number) => {
           onSeek(newTime);
@@ -306,7 +328,25 @@ export default function DJDeck({
     return () => {
       if (ws) ws.destroy();
     };
-  }, [state.trackLoaded, audioElem, deckId, waveColor, progressColor, cursorColor]);
+  }, [state.trackLoaded, state.audioUrl, deckId, waveColor, progressColor, cursorColor]);
+
+  // Sync visual playhead imperatively
+  useEffect(() => {
+    if (!state.trackLoaded || !state.playing) return;
+    
+    let rafId: number;
+    const tick = () => {
+      if (wavesurferRef.current) {
+        wavesurferRef.current.setTime(getCurrentTime());
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [state.playing, state.trackLoaded, getCurrentTime]);
 
   // Sync Hot Cues to Regions
   useEffect(() => {
@@ -410,7 +450,7 @@ export default function DJDeck({
               )}
             </div>
           )}
-          <TimerCard currentTime={state.currentTime} duration={state.duration} accentColor={accentColor} />
+          <TimerCard getCurrentTime={getCurrentTime} duration={state.duration} accentColor={accentColor} />
         </div>
       </header>
 

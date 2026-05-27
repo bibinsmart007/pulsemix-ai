@@ -107,6 +107,10 @@ def resolve_youtube_audio(youtube_url: str, output_dir: str, progress_callback=N
         'ignoreerrors': False,
         'socket_timeout': 15, # 15 second timeout to prevent hanging UI
         'progress_hooks': [yt_progress_hook],
+        'postprocessors': [{
+            'key': 'SponsorBlock',
+            'categories': ['sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'music_offtopic']
+        }],
     }
 
     print(f"[Extractor] Extracting audio stream from YouTube: {cleaned_url}")

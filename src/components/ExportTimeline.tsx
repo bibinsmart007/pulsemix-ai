@@ -38,7 +38,7 @@ export default function ExportTimeline({
 
   const fetchSnapshots = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/playlists/${playlistId}/snapshots`);
+      const res = await fetch(`http://localhost:8765/api/playlists/${playlistId}/snapshots`);
       const data = await res.json();
       if (data.success) {
         setSnapshots(data.snapshots || []);
@@ -57,7 +57,7 @@ export default function ExportTimeline({
   const createSnapshot = async (name: string, sourceType: string = 'manual', reason: string = '') => {
     setIsSavingSnapshot(true);
     try {
-      await fetch(`http://localhost:8000/api/playlists/${playlistId}/snapshots`, {
+      await fetch(`http://localhost:8765/api/playlists/${playlistId}/snapshots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, source_type: sourceType, reason })
@@ -74,7 +74,7 @@ export default function ExportTimeline({
     setIsAnalyzingSet(true);
     setShowAnalysisPanel(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/playlists/${playlistId}/set-analysis`);
+      const res = await fetch(`http://localhost:8765/api/playlists/${playlistId}/set-analysis`);
       const data = await res.json();
       if (data.success) {
         setSetAnalysis(data);
@@ -90,7 +90,7 @@ export default function ExportTimeline({
     if (!setAnalysis?.recommended_order) return;
     try {
       await createSnapshot("Auto: Before Optimization", "auto", "Optimization");
-      await fetch(`http://localhost:8000/api/playlists/${playlistId}/items/reorder`, {
+      await fetch(`http://localhost:8765/api/playlists/${playlistId}/items/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item_ids: setAnalysis.recommended_order })
@@ -105,7 +105,7 @@ export default function ExportTimeline({
 
   const restoreSnapshot = async (snapshotId: number) => {
     try {
-      await fetch(`http://localhost:8000/api/playlists/${playlistId}/snapshots/${snapshotId}/restore`, {
+      await fetch(`http://localhost:8765/api/playlists/${playlistId}/snapshots/${snapshotId}/restore`, {
         method: 'POST'
       });
       onItemsUpdated();
@@ -117,7 +117,7 @@ export default function ExportTimeline({
 
   useEffect(() => {
     if (playlistId) {
-      fetch(`http://localhost:8000/api/playlists/${playlistId}/transition-suggestions`)
+      fetch(`http://localhost:8765/api/playlists/${playlistId}/transition-suggestions`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {
@@ -130,7 +130,7 @@ export default function ExportTimeline({
 
   const applySuggestion = async (itemId: number, suggestion: any) => {
     try {
-      await fetch(`http://localhost:8000/api/playlist-items/${itemId}`, {
+      await fetch(`http://localhost:8765/api/playlist-items/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -176,7 +176,7 @@ export default function ExportTimeline({
     itemIds[newIndex] = temp;
 
     try {
-      await fetch(`http://localhost:8000/api/playlists/${playlistId}/items/reorder`, {
+      await fetch(`http://localhost:8765/api/playlists/${playlistId}/items/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item_ids: itemIds })
@@ -189,7 +189,7 @@ export default function ExportTimeline({
 
   const updateItemTransition = async (itemId: number, updates: any) => {
     try {
-      await fetch(`http://localhost:8000/api/playlist-items/${itemId}`, {
+      await fetch(`http://localhost:8765/api/playlist-items/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -510,7 +510,7 @@ export default function ExportTimeline({
                 const missing = items.filter(i => !i.filepath);
                 for (const item of missing) {
                   try {
-                    await fetch("http://localhost:8000/api/tracks/recover/auto", {
+                    await fetch("http://localhost:8765/api/tracks/recover/auto", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ url: item.youtube_url })

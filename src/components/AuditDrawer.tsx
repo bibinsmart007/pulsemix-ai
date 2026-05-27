@@ -34,7 +34,7 @@ export default function AuditDrawer({ isOpen, onClose, projectId }: AuditDrawerP
   const loadLogs = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/cloud/projects/${projectId}/audit`);
+      const res = await fetch(`http://localhost:8765/api/cloud/projects/${projectId}/audit`);
       const data = await res.json();
       if (data.success) {
         setLogs(data.logs);
