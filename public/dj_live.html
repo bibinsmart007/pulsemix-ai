@@ -267,7 +267,12 @@
     <div class="deck-btns">
       <button class="btn cyan" onclick="loadNextOnDeckB()">LOAD NEXT</button>
       <button class="btn" id="bLoopBtn" onclick="toggleAutoLoop('B')" style="border-color:#ffaa00; color:#ffaa00;">4 BEAT LOOP</button>
-      <button class="btn" onclick="togglePlay('B')" id="bPlay">PLAY</button>
+      <div style="display:flex; gap:4px; margin-bottom:8px;">
+        <button class="btn" onclick="seek('B', -9999)" style="flex:1; font-size:10px;">⏪ 0:00</button>
+        <button class="btn" onclick="seek('B', -10)" style="flex:1; font-size:10px;">⏪ -10s</button>
+        <button class="btn" onclick="togglePlay('B')" id="bPlay" style="flex:2;">PLAY</button>
+        <button class="btn" onclick="seek('B', 10)" style="flex:1; font-size:10px;">⏩ +10s</button>
+      </div>
       <button class="btn" onclick="resetEQ('B')">RESET EQ</button>
       <button class="btn" id="bAcapellaBtn" onclick="toggleAcapella('B')" style="border-color:#00d4ff; color:#00d4ff; font-size: 10px;">🎙️ ACA</button>
       <button class="btn" id="bInstBtn" onclick="toggleInstrumental('B')" style="border-color:#ff2bd6; color:#ff2bd6; font-size: 10px;">🎹 INST</button>
@@ -279,14 +284,19 @@
   <div style="display:flex;flex-direction:column;gap:10px;width:180px;">
     <div>
       <button class="btn" id="recordSetBtn" onclick="toggleRecording()" style="width:100%; font-size:12px; padding:8px; border-color:#f00; color:#f00; font-weight:bold; margin-bottom:10px; transition:0.2s;">🔴 REC SET</button>
-      <button class="btn" id="bassBoostBtn" onclick="toggleBassBoost()" style="width:100%; height: 40px; font-size: 14px; font-weight: bold; background: #222; border: 2px solid #555; color: #fff; margin-bottom: 12px; transition: 0.1s;">BASS BOOST</button>
+      <div style="display:flex; gap:6px; margin-bottom: 12px;">
+         <button class="btn" id="bassBoostBtn" onclick="toggleBassBoost()" style="flex:1; height: 40px; font-size: 12px; font-weight: bold; background: #222; border: 2px solid #555; color: #fff; transition: 0.1s;">BASS BOOST</button>
+         <button class="btn" id="micBtn" onclick="toggleMic()" style="flex:1; height: 40px; font-size: 12px; font-weight: bold; background: #222; border: 2px solid #555; color: #fff; transition: 0.1s;">🎙️ MIC OFF</button>
+      </div>
       
       <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;">LIVE SAMPLER</div>
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
         <button class="btn sampler-btn" onmousedown="playSample('kick')">KICK</button>
         <button class="btn sampler-btn" onmousedown="playSample('snare')">SNARE</button>
-        <button class="btn sampler-btn" id="darbukaBtn" onmousedown="playSample('darbuka')" style="background: rgba(255, 102, 0, 0.2); border-color: #ff6600; color: #ffaa55;">DARBUKA</button>
-        <button class="btn sampler-btn" id="chendaBtn" onmousedown="playSample('chenda')" style="background: rgba(0, 255, 102, 0.2); border-color: #00ff66; color: #55ffaa;">CHENDA</button>
+        <button class="btn sampler-btn" onmousedown="playSample('darbuka')" style="border-color:#ff6600; color:#ffaa55;">DARBUKA</button>
+        <button class="btn sampler-btn" onmousedown="playSample('chenda')" style="border-color:#00ff66; color:#55ffaa;">CHENDA</button>
+        <button class="btn sampler-btn" onmousedown="playSample('drums')" style="border-color:#f0f; color:#f0f;">DRUMS</button>
+        <button class="btn sampler-btn" onmousedown="playSample('violin')" style="border-color:#0ff; color:#0ff;">VIOLIN</button>
       </div>
     </div>
   </div>
