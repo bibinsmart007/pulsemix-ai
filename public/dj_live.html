@@ -669,62 +669,66 @@ function triggerMix() {
   const activeA = $("deckA").classList.contains("active");
   const aAudio = $("audioA"), bAudio = $("audioB");
   const now = ctx.currentTime;
-  const T = TRANSITION_SEC;
   
   const outIdx = activeA ? currentIdx : currentIdx + 1;
   const inIdx = activeA ? currentIdx + 1 : currentIdx;
   const outBpm = TRACKS[outIdx]?.bpm || 128;
   const inBpm = TRACKS[inIdx]?.bpm || 128;
+  const inFirstBeat = TRACKS[inIdx]?.first_beat || 0;
   
   const A = decks.A, B = decks.B;
 
+  let ratio = 1.0;
   if (outBpm > 0 && inBpm > 0) {
-     const ratio = outBpm / inBpm;
+     ratio = outBpm / inBpm;
      if (ratio > 0.85 && ratio < 1.15) {
-         const inAudio = activeA ? bAudio : aAudio;
-         inAudio.playbackRate = ratio;
-         inAudio.preservesPitch = true;
+         bAudio.playbackRate = ratio;
+         bAudio.preservesPitch = true;
      }
   }
 
-  bAudio.currentTime = TRACKS[nextIdx].skip !== undefined ? TRACKS[nextIdx].skip : SKIP_INTRO_SEC;
+  const bps = (outBpm / 60);
+  const beatInterval = 1.0 / bps;
+  const aPhase = aAudio.currentTime % beatInterval;
+  
+  const targetSkip = (TRACKS[nextIdx].skip !== undefined) ? TRACKS[nextIdx].skip : inFirstBeat;
+  bAudio.currentTime = Math.max(0, targetSkip - aPhase);
+
+  const T = beatInterval * 16; 
+  
   bAudio.play().catch(e => console.warn(e));
   $("bPlay").textContent = "PAUSE";
   $("bBadge").textContent = "INCOMING";
   $("deckB").classList.add("active"); $("deckB").classList.remove("cued");
 
-  B.lpf.frequency.cancelScheduledValues(now);
-  B.lpf.frequency.setValueAtTime(200, now);
-  B.lpf.frequency.exponentialRampToValueAtTime(20000, now + T * 0.7);
-  B.gain.gain.cancelScheduledValues(now);
-  
+  B.lpf.frequency.cancelScheduledValues(now); B.lpf.frequency.value = 20000;
+  B.hpf.frequency.cancelScheduledValues(now); B.hpf.frequency.value = 20;
+  B.low.gain.cancelScheduledValues(now); B.low.gain.value = 0; 
+
   if (mixIntervalId) clearInterval(mixIntervalId);
   const mixStart = ctx.currentTime;
+  
+  if ($("crossfader")) { $("crossfader").value = 0; applyCrossfader(0); }
+  
+  A.low.gain.cancelScheduledValues(now);
+  A.low.gain.setValueAtTime(A.low.gain.value || 0, now);
+  A.low.gain.linearRampToValueAtTime(-40, now + 0.1); 
+  
+  A.mid.gain.cancelScheduledValues(now);
+  A.mid.gain.linearRampToValueAtTime(-10, now + T * 0.5);
+
+  A.hpf.frequency.cancelScheduledValues(now);
+  A.hpf.frequency.setValueAtTime(20, now);
+  A.hpf.frequency.exponentialRampToValueAtTime(10000, now + T * 0.8); 
+
   mixIntervalId = setInterval(() => {
     let progress = (ctx.currentTime - mixStart) / T;
     if (progress >= 1) { progress = 1; clearInterval(mixIntervalId); }
-    const cfVal = -1 + (progress * 2);
     if ($("crossfader")) {
-      $("crossfader").value = cfVal;
-      applyCrossfader(cfVal);
+      $("crossfader").value = progress;
+      applyCrossfader(progress);
     }
   }, 20);
-
-  A.low.gain.cancelScheduledValues(now);
-  A.low.gain.setValueAtTime(A.low.gain.value || 0, now);
-  A.low.gain.setValueAtTime(0, now + T * 0.3);
-  A.low.gain.linearRampToValueAtTime(-40, now + T * 0.8);
-  
-  A.mid.gain.cancelScheduledValues(now);
-  A.mid.gain.setValueAtTime(A.mid.gain.value || 0, now);
-  A.mid.gain.linearRampToValueAtTime(-4, now + T * 0.4);
-
-  A.hpf.frequency.cancelScheduledValues(now);
-  A.hpf.frequency.setValueAtTime(A.hpf.frequency.value || 20, now + T * 0.5);
-  A.hpf.frequency.exponentialRampToValueAtTime(8000, now + T);
-
-  A.gain.gain.cancelScheduledValues(now);
-  // A.gain and B.gain fades are handled by mixIntervalId loop
 
   if (mixTimeoutId) clearTimeout(mixTimeoutId);
   mixTimeoutId = setTimeout(finishMix, T * 1000);

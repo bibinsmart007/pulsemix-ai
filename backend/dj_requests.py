@@ -91,9 +91,12 @@ def handle_analyze(req: AnalyzeRequest):
         
     try:
         y, sr = librosa.load(abs_path, sr=None)
-        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
         bpm = float(tempo[0]) if hasattr(tempo, "__len__") else float(tempo)
-        return {"success": True, "bpm": round(bpm, 2)}
+        first_beat = 0.0
+        if len(beat_frames) > 0:
+            first_beat = float(librosa.frames_to_time(beat_frames[0], sr=sr))
+        return {"success": True, "bpm": round(bpm, 2), "first_beat": round(first_beat, 3)}
     except Exception as e:
         print(f"Analyze error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
