@@ -665,8 +665,12 @@ function loadOnDeck(deckLetter, index) {
   // Auto-Skip intro (e.g. Saregama Carvaan ads) using the mathematically detected first beat
   audio.addEventListener("canplay", function onCp() {
       audio.removeEventListener("canplay", onCp);
-      if (t.first_beat) {
+      if (t.skip !== undefined) {
+          audio.currentTime = t.skip;
+      } else if (t.first_beat && t.first_beat > 5) {
           audio.currentTime = t.first_beat;
+      } else {
+          audio.currentTime = 10; // Default 10s skip to bypass Saregama Carvaan ads
       }
   });
 
@@ -1078,7 +1082,7 @@ function init() {
         if (startTimeOffset >= 0) {
             aAudio.currentTime = startTimeOffset;
         } else {
-            aAudio.currentTime = TRACKS[startIdx]?.skip !== undefined ? TRACKS[startIdx].skip : SKIP_INTRO_SEC;
+            aAudio.currentTime = TRACKS[startIdx]?.skip !== undefined ? TRACKS[startIdx].skip : 10;
         }
       };
       if (aAudio.readyState >= 1) setupTime();
@@ -1497,7 +1501,7 @@ function jumpToTrack(idx) {
   }
   loadOnDeck("A", currentIdx);
   $("audioA").addEventListener("canplaythrough", () => {
-    $("audioA").currentTime = TRACKS[currentIdx].skip !== undefined ? TRACKS[currentIdx].skip : SKIP_INTRO_SEC;
+    $("audioA").currentTime = TRACKS[currentIdx].skip !== undefined ? TRACKS[currentIdx].skip : 10;
     $("audioA").play().catch(()=>{});
     if($("aPlayCircle")) $("aPlayCircle").innerHTML = "&#10074;&#10074;";
     if (ctx) currentTrackPlayStart = ctx.currentTime;
