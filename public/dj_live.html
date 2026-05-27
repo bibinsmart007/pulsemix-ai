@@ -581,6 +581,15 @@ function loadOnDeck(deckLetter, index) {
   audio.load();
   $(deckLetter.toLowerCase() + "Title").textContent = (t.isRequest ? "[REQ] " : "") + `#${t.n} — ${t.id}`;
   decks[deckLetter].cues = [null, null, null, null];
+  
+  // Auto-Skip intro (e.g. Saregama Carvaan ads) using the mathematically detected first beat
+  audio.addEventListener("canplay", function onCp() {
+      audio.removeEventListener("canplay", onCp);
+      if (t.first_beat) {
+          audio.currentTime = t.first_beat;
+      }
+  });
+
   renderHotCues(deckLetter);
   
   if (!t.bpm) {
