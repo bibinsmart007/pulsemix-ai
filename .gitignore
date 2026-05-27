@@ -47,3 +47,22 @@ public/downloads/
 public/exports/
 test.wav
 
+
+# === Post-party cleanup ===
+# Redis binaries (Windows) - should be downloaded fresh, not committed
+redis/
+redis.zip
+dump.rdb
+
+# Sandbox scratch (intermediate test files, render chunks)
+scratch/
+
+# Mock audio test files (for unit tests, not for production)
+public/storage/
+
+# Render output files (regenerated from sources)
+public/exports/*.mp3
+public/exports/*.wav
+public/exports/*.mka
+public/exports/*.ogg
+public/exports/*.flac
