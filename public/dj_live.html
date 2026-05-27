@@ -293,7 +293,7 @@
       <button class="player-icon-btn" onclick="toggleAutoMix()" title="Toggle Auto-Mix">&#128256;</button>
       <button class="player-icon-btn" onclick="toggleAutoLoop('A')" title="Loop 4 Beats">&#128257;</button>
       <div class="divider"></div>
-      <button class="player-icon-btn" onclick="seek('A', -9999); togglePlay('A');" title="Stop">&#9209;</button>
+      <button class="player-icon-btn" onclick="stopDeck('A');" title="Stop">&#9209;</button>
       <button class="player-icon-btn" onclick="seek('A', -10)" title="Rewind 10s">&#9194;</button>
       <button class="player-play-btn" onclick="togglePlay('A')" id="aPlayCircle">&#9658;</button>
       <button class="player-icon-btn" onclick="seek('A', 10)" title="Forward 10s">&#9193;</button>
@@ -342,7 +342,7 @@
       <button class="player-icon-btn" onclick="toggleAutoMix()" title="Toggle Auto-Mix">&#128256;</button>
       <button class="player-icon-btn" onclick="toggleAutoLoop('B')" title="Loop 4 Beats">&#128257;</button>
       <div class="divider"></div>
-      <button class="player-icon-btn" onclick="seek('B', -9999); togglePlay('B');" title="Stop">&#9209;</button>
+      <button class="player-icon-btn" onclick="stopDeck('B');" title="Stop">&#9209;</button>
       <button class="player-icon-btn" onclick="seek('B', -10)" title="Rewind 10s">&#9194;</button>
       <button class="player-play-btn" onclick="togglePlay('B')" id="bPlayCircle">&#9658;</button>
       <button class="player-icon-btn" onclick="seek('B', 10)" title="Forward 10s">&#9193;</button>
@@ -737,8 +737,15 @@ function togglePlay(which) {
   if (!ctx) initAudio();
   if (ctx.state === "suspended") ctx.resume();
   const a = $("audio" + which);
-  if (a.paused) { a.play().catch(e => console.warn(e)); $(which.toLowerCase() + "Play").textContent = "PAUSE"; }
-  else { a.pause(); $(which.toLowerCase() + "Play").textContent = "PLAY"; }
+  if (a.paused) { 
+    a.play().catch(e => console.warn(e)); 
+    let oldBtn = $(which.toLowerCase() + "Play");
+    if(oldBtn) oldBtn.textContent = "PAUSE"; 
+  } else { 
+    a.pause(); 
+    let oldBtn = $(which.toLowerCase() + "Play");
+    if(oldBtn) oldBtn.textContent = "PLAY"; 
+  }
 }
 
 function seek(which, dx) {
@@ -793,7 +800,7 @@ function triggerMix() {
   const T = beatInterval * 4; 
   
   bAudio.play().catch(e => console.warn(e));
-  $("bPlay").textContent = "PAUSE";
+  if($("bPlayCircle")) $("bPlayCircle").innerHTML = "&#10074;&#10074;";
   $("bBadge").textContent = "INCOMING";
   $("deckB").classList.add("active"); $("deckB").classList.remove("cued");
 
@@ -833,7 +840,7 @@ function triggerMix() {
 function finishMix() {
   const aAudio = $("audioA"), bAudio = $("audioB");
   aAudio.pause();
-  $("aPlay").textContent = "PLAY";
+  if($("aPlayCircle")) $("aPlayCircle").innerHTML = "&#9658;";
 
   const A = decks.A;
   A.low.gain.cancelScheduledValues(ctx.currentTime); A.low.gain.value = 0;
@@ -868,7 +875,7 @@ function finishMix() {
     setTimeout(() => {
       bAudio.pause(); bAudio.currentTime = 0;
       bAudio.playbackRate = 1.0;
-      $("bPlay").textContent = "PLAY";
+      if($("bPlayCircle")) $("bPlayCircle").innerHTML = "&#9658;";
       const B = decks.B;
       B.hpf.frequency.value = 20; B.lpf.frequency.value = 20000;
       B.low.gain.value = 0; B.mid.gain.value = 0; B.high.gain.value = 0;
@@ -1064,7 +1071,7 @@ function init() {
       const aAudio = $("audioA");
       
       $("startGate").style.display = "none";
-      $("aPlay").textContent = "PAUSE";
+      if($("aPlayCircle")) $("aPlayCircle").innerHTML = "&#10074;&#10074;";
       currentTrackPlayStart = ctx.currentTime;
       
       const setupTime = () => {
@@ -1492,7 +1499,7 @@ function jumpToTrack(idx) {
   $("audioA").addEventListener("canplaythrough", () => {
     $("audioA").currentTime = TRACKS[currentIdx].skip !== undefined ? TRACKS[currentIdx].skip : SKIP_INTRO_SEC;
     $("audioA").play().catch(()=>{});
-    $("aPlay").textContent = "PAUSE";
+    if($("aPlayCircle")) $("aPlayCircle").innerHTML = "&#10074;&#10074;";
     if (ctx) currentTrackPlayStart = ctx.currentTime;
   }, { once: true });
   if (nextIdx < TRACKS.length) loadNextOnDeckB();
@@ -1924,6 +1931,18 @@ function playSample(type) {
         gain.gain.linearRampToValueAtTime(0, t + 0.8);
         lfo.start(t); osc.start(t); osc.stop(t + 0.8); lfo.stop(t + 0.8);
     }
+}
+
+function stopDeck(which) {
+  const a = $("audio" + which);
+  if (a) {
+    a.pause();
+    a.currentTime = 0;
+  }
+  const btn = $(which.toLowerCase() + "PlayCircle");
+  if (btn) {
+    btn.innerHTML = "&#9658;"; // Play icon
+  }
 }
 </script>
 
