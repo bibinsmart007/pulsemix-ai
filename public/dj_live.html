@@ -802,7 +802,8 @@ function triggerMix() {
   const aPhase = aAudio.currentTime % beatInterval;
   
   const targetSkip = (TRACKS[nextIdx].skip !== undefined) ? TRACKS[nextIdx].skip : inFirstBeat;
-  bAudio.currentTime = Math.max(0, targetSkip - aPhase);
+  // B's playbackRate is `ratio`, so we convert real-time phase to native-time phase.
+  bAudio.currentTime = Math.max(0, targetSkip + (aPhase / ratio));
 
   // Extend mix to 16 beats (~7.5s at 128bpm)
   const T = beatInterval * 16; 
