@@ -5,10 +5,9 @@
       "framework": "nextjs"
     },
     "backend": {
-      "root": "backend",
+      "entrypoint": "backend/main.py",
       "routePrefix": "/_/backend",
-      "framework": "other",
-      "entrypoint": "main.py"
+      "framework": "fastapi"
     }
   }
 }
