@@ -260,7 +260,7 @@ export default function Home() {
 
   const fetchAiSessions = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8765/api/ai/sessions");
+      const res = await fetch("/api/ai/sessions");
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -273,14 +273,14 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (engine.activeTab === "ai_assistant") {
+    if (engine.activeTab === "assistant") {
       fetchAiSessions();
     }
   }, [engine.activeTab]);
 
   const handleLoadSession = async (sessionId: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/${sessionId}`);
+      const res = await fetch(`/api/ai/sessions/${sessionId}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.session) {
@@ -301,7 +301,7 @@ export default function Home() {
   const handleRateSession = async (sessionId: number, rating: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/${sessionId}/rate`, {
+      const res = await fetch(`/api/ai/sessions/${sessionId}/rate`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating })
@@ -318,7 +318,7 @@ export default function Home() {
 
     e.stopPropagation();
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/${sessionId}/duplicate`, { method: "POST" });
+      const res = await fetch(`/api/ai/sessions/${sessionId}/duplicate`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -335,7 +335,7 @@ export default function Home() {
   const handleCompareSessions = async () => {
     if (selectedForCompare.length !== 2) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/ai/sessions/compare?id1=${selectedForCompare[0]}&id2=${selectedForCompare[1]}`);
+      const res = await fetch(`/api/ai/sessions/compare?id1=${selectedForCompare[0]}&id2=${selectedForCompare[1]}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -560,7 +560,7 @@ export default function Home() {
     if (autoLoadedRef.current) return;
     autoLoadedRef.current = true;
 
-    fetch("http://127.0.0.1:8765/api/inventory")
+    fetch("/api/inventory")
       .then(res => res.json())
       .then(data => {
         if (data && data.tracks) {
@@ -650,7 +650,7 @@ export default function Home() {
   const handleRecoverAuto = async (item: any) => {
     try {
       addGlobalJob(`recover-${item.item_id}`, `Recovering ${item.title}`);
-      await fetch("http://localhost:8765/api/tracks/recover/auto", {
+      await fetch("/api/tracks/recover/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: item.youtube_url })
@@ -667,7 +667,7 @@ export default function Home() {
       const buffer = await file.arrayBuffer();
       addGlobalJob(`recover-manual-${recoveringItem.item_id}`, `Uploading ${file.name}`);
       
-      await fetch("http://localhost:8765/api/tracks/recover/manual", {
+      await fetch("/api/tracks/recover/manual", {
         method: "POST",
         headers: {
           "x-youtube-url": recoveringItem.youtube_url,
@@ -684,7 +684,7 @@ export default function Home() {
   const handlePreviewTransition = async (itemId: number, playlistId: number) => {
     try {
       addToast('Rendering transition preview...', 'info');
-      const res = await fetch(`http://127.0.0.1:8765/api/preview-transition/${itemId}`, {
+      const res = await fetch(`/api/preview-transition/${itemId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playlist_id: playlistId })
@@ -706,7 +706,7 @@ export default function Home() {
   const handlePublishVersion = async (config: PublishConfig) => {
     if (!publishTargetVersion) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/cloud/versions/${publishTargetVersion}/publish`, {
+      const res = await fetch(`/api/cloud/versions/${publishTargetVersion}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -735,7 +735,7 @@ export default function Home() {
 
   const handleOpenPublicLink = async (token: string, password?: string) => {
     try {
-      let url = `http://127.0.0.1:8765/api/public/publish/${token}`;
+      let url = `/api/public/publish/${token}`;
       if (password) url += `?pwd=${encodeURIComponent(password)}`;
       
       const res = await fetch(url);
@@ -759,7 +759,7 @@ export default function Home() {
 
   const handleFetchActiveLinks = async (versionId: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/cloud/versions/${versionId}/links`);
+      const res = await fetch(`/api/cloud/versions/${versionId}/links`);
       const data = await res.json();
       if (data.success) {
         setActivePublishLinks(data.links);
@@ -772,7 +772,7 @@ export default function Home() {
 
   const handleRevokeLink = async (token: string, versionId: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/cloud/publish/${token}/revoke`, { method: "POST" });
+      const res = await fetch(`/api/cloud/publish/${token}/revoke`, { method: "POST" });
       const data = await res.json();
       if (data.success) {
         addToast("Link revoked", "success");
@@ -785,7 +785,7 @@ export default function Home() {
 
   const fetchPlaylists = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/playlists?t=${Date.now()}`);
+      const res = await fetch(`/api/playlists?t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
         setPlaylists(data.playlists);
@@ -814,7 +814,7 @@ export default function Home() {
     if (playlists.length > 0 && !activePlaylistId) {
       const firstId = playlists[0].id;
       setActivePlaylistId(firstId);
-      fetch(`http://127.0.0.1:8765/api/playlists/${firstId}/items`)
+      fetch(`/api/playlists/${firstId}/items`)
         .then(r => r.json())
         .then(d => { if(d.success) setActivePlaylistItems(d.items); })
         .catch(e => console.error("Failed to auto-load playlist items:", e));
@@ -824,7 +824,7 @@ export default function Home() {
   // Fetch export jobs so the UI shows the history and latest result on reload
   const fetchExportHistory = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/export?t=${Date.now()}`);
+      const res = await fetch(`/api/export?t=${Date.now()}`);
       const d = await res.json();
       if (d.success && d.jobs) {
         setExportHistory(d.jobs);
@@ -863,7 +863,7 @@ export default function Home() {
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) return;
     try {
-      const res = await fetch("http://127.0.0.1:8765/api/playlists", {
+      const res = await fetch("/api/playlists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newPlaylistName })
@@ -888,7 +888,7 @@ export default function Home() {
   const loadPlaylistItems = async (playlistId: number, currentSnap: boolean = autoPhraseSnap) => {
     setActivePlaylistId(playlistId);
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/playlists/${playlistId}/items?t=${Date.now()}&auto_phrase_snap=${currentSnap}`);
+      const res = await fetch(`/api/playlists/${playlistId}/items?t=${Date.now()}&auto_phrase_snap=${currentSnap}`);
       const data = await res.json();
       if (data.success) {
         setActivePlaylistItems(data.items);
@@ -910,7 +910,7 @@ export default function Home() {
     const itemIds = sortedItems.map(item => item.item_id);
     
     try {
-      const res = await fetch(`http://127.0.0.1:8765/api/playlists/${activePlaylistId}/items/reorder`, {
+      const res = await fetch(`/api/playlists/${activePlaylistId}/items/reorder`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_ids: itemIds })
@@ -952,7 +952,7 @@ export default function Home() {
       setExportStatus("queued");
       setShowExportModal(false);
       addToast("Export started!", "info");
-      const res = await fetch("http://127.0.0.1:8765/api/export", {
+      const res = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playlist_id: pid, export_name: name, auto_phrase_snap: autoPhraseSnap })
@@ -979,7 +979,7 @@ export default function Home() {
     
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8765/api/export/${exportJobId}`);
+        const res = await fetch(`/api/export/${exportJobId}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.job) {
@@ -1026,7 +1026,7 @@ export default function Home() {
     if (!trackToAdd) return;
     try {
       const orderIndex = activePlaylistItems.length;
-      const res = await fetch(`http://127.0.0.1:8765/api/playlists/${playlistId}/items`, {
+      const res = await fetch(`/api/playlists/${playlistId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ youtube_url: trackToAdd.youtube_url || trackToAdd.url, position_index: orderIndex })
@@ -1067,7 +1067,7 @@ export default function Home() {
     updateGlobalJob(jobId, { title: 'AI Mix Generation', type: 'ai_generation', status: 'Processing' });
 
     try {
-      const response = await fetch("http://127.0.0.1:8765/api/ai/generate", {
+      const response = await fetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1087,7 +1087,7 @@ export default function Home() {
         
         // Auto-save the AI Session
         try {
-          const saveRes = await fetch("http://127.0.0.1:8765/api/ai/sessions", {
+          const saveRes = await fetch("/api/ai/sessions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1151,7 +1151,7 @@ export default function Home() {
     if (!retryUrl) setYoutubeUrl("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8765/api/import", {
+      const response = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlToImport }),
@@ -1167,7 +1167,7 @@ export default function Home() {
         
         const pollInterval = setInterval(async () => {
           try {
-            const statusRes = await fetch(`http://127.0.0.1:8765/api/status/${jobId}`);
+            const statusRes = await fetch(`/api/status/${jobId}`);
             if (!statusRes.ok) throw new Error("Status check failed");
             
             const statusData = await statusRes.json();
@@ -1348,7 +1348,7 @@ export default function Home() {
         }}
         onViewPublishLinks={(versionId) => {
           setPublishTargetVersion(versionId);
-          fetch(`http://127.0.0.1:8765/api/cloud/versions/${versionId}/links`)
+          fetch(`/api/cloud/versions/${versionId}/links`)
             .then(res => res.json())
             .then(data => {
               if (data.success) {
@@ -1360,7 +1360,7 @@ export default function Home() {
         onPublishVersion={(versionId) => {
           setPublishTargetVersion(versionId);
           if (cloudProject) {
-            fetch(`http://localhost:8765/api/cloud/projects/${cloudProject.id}/exports`)
+            fetch(`/api/cloud/projects/${cloudProject.id}/exports`)
               .then(res => res.json())
               .then(data => {
                 if (data.success) {
@@ -1645,132 +1645,15 @@ export default function Home() {
           
           {/* Tab 1: Mix Studio Panel */}
           {engine.activeTab === "studio" && (
-            <div className="h-full flex flex-col gap-6 relative">
-              
-              {!engine.deckA.trackLoaded && !engine.deckB.trackLoaded && (
-                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 z-10 animate-fade-in text-center pointer-events-none">
-                  <div className="bg-black/60 border border-white/10 rounded-2xl p-6 backdrop-blur-md shadow-2xl">
-                    <h3 className="text-xl font-bold font-mono text-white mb-2">Mix Studio is Empty</h3>
-                    <p className="text-sm text-neutral-400">Apply a variation from the AI Assistant to arm the decks automatically,<br/>or load tracks manually via the Library.</p>
-                  </div>
-                </div>
-              )}
-
-              {engine.deckA.trackLoaded && !dismissedHints['studio_stem_extract'] && (
-                <div className="absolute top-24 left-[10%] z-20 animate-fade-in pointer-events-auto">
-                  <div className="bg-neon-purple/10 border border-neon-purple/30 p-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.2)] flex items-start gap-4 max-w-sm backdrop-blur-md">
-                    <Zap className="w-5 h-5 text-neon-purple shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm text-white font-mono mb-1">Stem Extraction</p>
-                      <p className="text-xs text-neon-purple/70">Click the Zap icon on the deck to isolate vocals, drums, or bass in real-time.</p>
-                    </div>
-                    <button onClick={() => dismissHint('studio_stem_extract')} className="text-neutral-500 hover:text-white shrink-0"><X className="w-4 h-4" /></button>
-                  </div>
-                </div>
-              )}
-              
-              {/* Full-width FFT Spectrum Analyser Panel */}
-              <div className="w-full h-20 flex-shrink-0">
-                <Visualizer analyser={engine.analyserNodeRef.current} isPlaying={engine.deckA.playing || engine.deckB.playing} />
-              </div>
-
-              {/* Core studio grid: Side-by-Side Decks with Central Mixer */}
-              <div className="flex-1 min-h-0 grid gap-6 grid-cols-1 xl:grid-cols-[1fr_420px_1fr] overflow-x-auto">
-                
-                {/* Left Side: Deck A */}
-                <div className="min-w-0 flex flex-col h-full overflow-y-auto">
-                  <DJDeck 
-                    deckId="A" 
-                    state={engine.deckA}
-                    getCurrentTime={() => engine.getCurrentTime("A")}
-                    onPlay={() => engine.playDeck("A")}
-                    onPause={() => engine.pauseDeck("A")}
-                    onCue={() => engine.cueDeck("A")}
-                    onSeek={(sec) => engine.seekDeck("A", sec)}
-                    onBpmChange={(bpm) => engine.updateBpm("A", bpm)}
-                    onPitchChange={(pitch) => engine.updatePitch("A", pitch)}
-                    onSync={() => engine.syncDecks("B")}
-                    onVinylStop={() => engine.triggerVinylStop("A")}
-                    onSetHotCue={(i, t) => engine.setHotCue("A", i, t)}
-                    onTriggerHotCue={(i) => engine.triggerHotCue("A", i)}
-                    onToggleLoop={(bars) => engine.toggleLoop("A", bars)}
-                    onEqChange={(band, val) => engine.updateEQ("A", band, val)}
-                    onFilterChange={(val) => engine.updateFilter("A", val)}
-                    onVolumeChange={(val) => engine.updateDeckVolume("A", val)}
-                    onToggleCue={() => engine.toggleCue("A")}
-                    onExtractStems={() => {
-                      try {
-                        addToast("Attempting to auto-recover missing media.", "info");
-                        setRecoveringItem(null);
-                      } catch(e) {}
-                      addGlobalJob(`extract-deckA`, "Extracting Stems (Deck A)");
-                      engine.extractStems("A");
-                    }}
-                    onFileDrop={(file) => {
-                      const url = URL.createObjectURL(file);
-                      engine.loadTrack("A", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
-                    }}
-                  />
-                </div>
-
-                {/* Central Column: Master Mixer Desk (Contains EQ strips for both channels) */}
-                <div className="flex flex-col h-full overflow-y-auto">
-                  <MixerDesk 
-                    stateA={engine.deckA}
-                    stateB={engine.deckB}
-                    isPlaying={engine.deckA.playing || engine.deckB.playing}
-                    crossfader={engine.crossfader}
-                    setCrossfader={engine.setCrossfader}
-                    masterVolume={engine.masterVolume}
-                    setMasterVolume={engine.setMasterVolume}
-                    isTransitioning={engine.isTransitioning}
-                    transitionProgress={engine.transitionProgress}
-                    onTriggerTransition={engine.triggerAutomatedTransition}
-                    delayActive={engine.fxState.delay}
-                    reverbActive={engine.fxState.reverb}
-                    onToggleFX={(fx, val) => engine.updateFX(fx, val)}
-                    onEQChange={(deckId, band, val) => engine.updateEQ(deckId, band, val)}
-                    onFilterChange={(deckId, val) => engine.updateFilter(deckId, val)}
-                    onVolumeChange={(deckId, val) => engine.updateDeckVolume(deckId, val)}
-                  />
-                </div>
-
-                {/* Right Side: Deck B */}
-                <div className="min-w-0 flex flex-col h-full overflow-y-auto">
-                  <DJDeck 
-                    deckId="B" 
-                    state={engine.deckB}
-                    getCurrentTime={() => engine.getCurrentTime("B")}
-                    onPlay={() => engine.playDeck("B")}
-                    onPause={() => engine.pauseDeck("B")}
-                    onCue={() => engine.cueDeck("B")}
-                    onSeek={(sec) => engine.seekDeck("B", sec)}
-                    onBpmChange={(bpm) => engine.updateBpm("B", bpm)}
-                    onPitchChange={(pitch) => engine.updatePitch("B", pitch)}
-                    onSync={() => engine.syncDecks("A")}
-                    onVinylStop={() => engine.triggerVinylStop("B")}
-                    onSetHotCue={(i, t) => engine.setHotCue("B", i, t)}
-                    onTriggerHotCue={(i) => engine.triggerHotCue("B", i)}
-                    onToggleLoop={(bars) => engine.toggleLoop("B", bars)}
-                    onEqChange={(band, val) => engine.updateEQ("B", band, val)}
-                    onFilterChange={(val) => engine.updateFilter("B", val)}
-                    onVolumeChange={(val) => engine.updateDeckVolume("B", val)}
-                    onToggleCue={() => engine.toggleCue("B")}
-                    onExtractStems={() => {
-                      engine.extractStems("B");
-                      addToast("Isolating stems in the background.", "info");
-                      addGlobalJob(`extract-deckB`, "Extracting Stems (Deck B)");
-                    }}
-                    onFileDrop={(file) => {
-                      const url = URL.createObjectURL(file);
-                      engine.loadTrack("B", url, file.name.replace(/\.[^/.]+$/, ""), 128, "8A", "", "Local File");
-                    }}
-                  />
-                </div>
-
-              </div>
+            <div className="h-full flex flex-col relative w-full overflow-hidden bg-black rounded-xl border border-white/10">
+              <iframe 
+                src="/dj_live.html" 
+                className="w-full h-full border-none"
+                title="PulseMix Live DJ Mode"
+              />
             </div>
           )}
+
 
           {/* Tab: AI Assistant Panel */}
           {engine.activeTab === "assistant" && (
@@ -2051,7 +1934,7 @@ export default function Home() {
                             
                             if (currentAiSessionId) {
                                try {
-                                 await fetch(`http://127.0.0.1:8765/api/ai/sessions/${currentAiSessionId}/apply`, {
+                                 await fetch(`/api/ai/sessions/${currentAiSessionId}/apply`, {
                                    method: "PUT",
                                    headers: { "Content-Type": "application/json" },
                                    body: JSON.stringify({
@@ -2168,7 +2051,7 @@ export default function Home() {
                                     engine.loadTrack("B", deck_b.url, deck_b.title, suggested_bpm, deck_b.key, deck_b.thumbnail, deck_b.genre || "Auto", deck_b.youtube_url || deck_b.url, deck_b.stem_status, deck_b.hot_cues, deck_b.beatgrid);
                                     
                                     try {
-                                       await fetch(`http://127.0.0.1:8765/api/ai/sessions/${session.id}/apply`, {
+                                       await fetch(`/api/ai/sessions/${session.id}/apply`, {
                                          method: "PUT",
                                          headers: { "Content-Type": "application/json" },
                                          body: JSON.stringify({ project_id: cloudProject?.id || null, version_id: currentVersionId || null })
@@ -2784,7 +2667,7 @@ export default function Home() {
                             selectedItemId={selectedItemId}
                             onSelectItem={(id) => setSelectedItemId(id)}
                             onUpdateItem={(itemId, updates) => {
-                              fetch(`http://127.0.0.1:8765/api/playlist-items/${itemId}`, { 
+                              fetch(`/api/playlist-items/${itemId}`, { 
                                 method: "PUT", 
                                 headers: {"Content-Type": "application/json"}, 
                                 body: JSON.stringify(updates) 
@@ -2904,7 +2787,7 @@ export default function Home() {
                                   TRIM START (ms)
                                   <input type="number" defaultValue={item.trim_start_ms} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ trim_start_ms: parseFloat(e.target.value) })
@@ -2916,7 +2799,7 @@ export default function Home() {
                                   TRIM END (ms)
                                   <input type="number" defaultValue={item.trim_end_ms} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ trim_end_ms: parseFloat(e.target.value) })
@@ -2928,7 +2811,7 @@ export default function Home() {
                                   CROSSFADE DURATION (ms)
                                   <input type="number" defaultValue={item.crossfade_duration_ms} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ crossfade_duration_ms: parseFloat(e.target.value) })
@@ -2944,7 +2827,7 @@ export default function Home() {
                                   FADE CURVE
                                   <select defaultValue={item.fade_curve || 'linear'}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ fade_curve: e.target.value })
@@ -2959,7 +2842,7 @@ export default function Home() {
                                   DUCKING (dB)
                                   <input type="number" step="0.5" max="0" defaultValue={item.duck_amount_db || 0.0} 
                                     onBlur={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ duck_amount_db: parseFloat(e.target.value) })
@@ -2971,7 +2854,7 @@ export default function Home() {
                                   EQ MODE
                                   <select defaultValue={item.eq_mode || 'none'}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ eq_mode: e.target.value })
@@ -2989,7 +2872,7 @@ export default function Home() {
                                   BPM SYNC
                                   <select defaultValue={item.sync_mode || 'auto'}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ sync_mode: e.target.value })
@@ -3004,7 +2887,7 @@ export default function Home() {
                                   PHRASE SNAP
                                   <select defaultValue={item.phrase_snap_override || ''}
                                     onChange={(e) => {
-                                      fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, {
+                                      fetch(`/api/playlist-items/${item.item_id}`, {
                                         method: "PUT",
                                         headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify({ phrase_snap_override: e.target.value === '' ? null : e.target.value })
@@ -3067,7 +2950,7 @@ export default function Home() {
                                 </div>
                                 <button 
                                   onClick={() => {
-                                    fetch(`http://127.0.0.1:8765/api/playlist-items/${item.item_id}`, { method: 'DELETE' }).then(() => {
+                                    fetch(`/api/playlist-items/${item.item_id}`, { method: 'DELETE' }).then(() => {
                                       setSelectedItemId(null);
                                       loadPlaylistItems(activePlaylistId as number);
                                     });
@@ -3081,7 +2964,7 @@ export default function Home() {
                                 <button 
                                   onClick={() => {
                                     setIsSuggesting(true);
-                                    fetch(`http://127.0.0.1:8765/api/recommendations?base_youtube_url=${encodeURIComponent(item.youtube_url)}`)
+                                    fetch(`/api/recommendations?base_youtube_url=${encodeURIComponent(item.youtube_url)}`)
                                       .then(r => r.json())
                                       .then(data => {
                                         if(data.success) {
@@ -3130,7 +3013,7 @@ export default function Home() {
                                         </div>
                                         <button
                                           onClick={() => {
-                                            fetch(`http://127.0.0.1:8765/api/playlists/${activePlaylistId}/items`, {
+                                            fetch(`/api/playlists/${activePlaylistId}/items`, {
                                               method: "POST",
                                               headers: {"Content-Type": "application/json"},
                                               body: JSON.stringify({
@@ -3142,7 +3025,7 @@ export default function Home() {
                                             .then(data => {
                                               if(data.success && data.item_id) {
                                                 // Apply suggested transitions
-                                                fetch(`http://127.0.0.1:8765/api/playlist-items/${data.item_id}`, {
+                                                fetch(`/api/playlist-items/${data.item_id}`, {
                                                   method: "PUT",
                                                   headers: {"Content-Type": "application/json"},
                                                   body: JSON.stringify(rec.suggestion)
