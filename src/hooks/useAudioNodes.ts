@@ -13,12 +13,9 @@ export function useAudioNodes() {
   const sourceNodeARef = useRef<MediaElementAudioSourceNode | null>(null);
 
   // Deck A "Stems" (EQ Isolator)
-  const stemLowPassARef = useRef<BiquadFilterNode | null>(null);
-  const stemBandPassARef = useRef<BiquadFilterNode | null>(null);
-  const stemHighPassARef = useRef<BiquadFilterNode | null>(null);
-  const stemLowGainARef = useRef<GainNode | null>(null);
-  const stemMidGainARef = useRef<GainNode | null>(null);
-  const stemHighGainARef = useRef<GainNode | null>(null);
+  const stemLowARef = useRef<BiquadFilterNode | null>(null);
+  const stemMidARef = useRef<BiquadFilterNode | null>(null);
+  const stemHighARef = useRef<BiquadFilterNode | null>(null);
 
   // Deck B Nodes
   const eqLowBRef = useRef<BiquadFilterNode | null>(null);
@@ -30,12 +27,9 @@ export function useAudioNodes() {
   const sourceNodeBRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   // Deck B "Stems" (EQ Isolator)
-  const stemLowPassBRef = useRef<BiquadFilterNode | null>(null);
-  const stemBandPassBRef = useRef<BiquadFilterNode | null>(null);
-  const stemHighPassBRef = useRef<BiquadFilterNode | null>(null);
-  const stemLowGainBRef = useRef<GainNode | null>(null);
-  const stemMidGainBRef = useRef<GainNode | null>(null);
-  const stemHighGainBRef = useRef<GainNode | null>(null);
+  const stemLowBRef = useRef<BiquadFilterNode | null>(null);
+  const stemMidBRef = useRef<BiquadFilterNode | null>(null);
+  const stemHighBRef = useRef<BiquadFilterNode | null>(null);
 
   // FX & Master
   const masterGainRef = useRef<GainNode | null>(null);
@@ -82,14 +76,9 @@ export function useAudioNodes() {
       const eqHigh = ctx.createBiquadFilter(); eqHigh.type = "highshelf"; eqHigh.frequency.value = 4000;
       const filter = ctx.createBiquadFilter(); filter.type = "peaking"; filter.frequency.value = 1000;
       
-      const stemLowPass = ctx.createBiquadFilter(); stemLowPass.type = "lowpass"; stemLowPass.frequency.value = 250;
-      const stemBandPass = ctx.createBiquadFilter(); stemBandPass.type = "bandpass"; stemBandPass.frequency.value = 1500; stemBandPass.Q.value = 0.5;
-      const stemHighPass = ctx.createBiquadFilter(); stemHighPass.type = "highpass"; stemHighPass.frequency.value = 3500;
-      
-      const stemLowGain = ctx.createGain();
-      const stemMidGain = ctx.createGain();
-      const stemHighGain = ctx.createGain();
-      const stemSumGain = ctx.createGain();
+      const stemLow = ctx.createBiquadFilter(); stemLow.type = "lowshelf"; stemLow.frequency.value = 250;
+      const stemMid = ctx.createBiquadFilter(); stemMid.type = "peaking"; stemMid.frequency.value = 1500; stemMid.Q.value = 0.5;
+      const stemHigh = ctx.createBiquadFilter(); stemHigh.type = "highshelf"; stemHigh.frequency.value = 3500;
 
       const volumeGain = ctx.createGain();
       const crossGain = ctx.createGain();
@@ -98,11 +87,11 @@ export function useAudioNodes() {
       eqMid.connect(eqHigh);
       eqHigh.connect(filter);
 
-      filter.connect(stemLowPass); stemLowPass.connect(stemLowGain); stemLowGain.connect(stemSumGain);
-      filter.connect(stemBandPass); stemBandPass.connect(stemMidGain); stemMidGain.connect(stemSumGain);
-      filter.connect(stemHighPass); stemHighPass.connect(stemHighGain); stemHighGain.connect(stemSumGain);
+      filter.connect(stemLow);
+      stemLow.connect(stemMid);
+      stemMid.connect(stemHigh);
+      stemHigh.connect(volumeGain);
 
-      stemSumGain.connect(volumeGain);
       volumeGain.connect(crossGain);
 
       crossGain.connect(masterGain);
@@ -111,13 +100,11 @@ export function useAudioNodes() {
 
       if (deck === "A") {
         eqLowARef.current = eqLow; eqMidARef.current = eqMid; eqHighARef.current = eqHigh; biquadFilterARef.current = filter;
-        stemLowPassARef.current = stemLowPass; stemBandPassARef.current = stemBandPass; stemHighPassARef.current = stemHighPass;
-        stemLowGainARef.current = stemLowGain; stemMidGainARef.current = stemMidGain; stemHighGainARef.current = stemHighGain;
+        stemLowARef.current = stemLow; stemMidARef.current = stemMid; stemHighARef.current = stemHigh;
         volumeGainARef.current = volumeGain; crossGainARef.current = crossGain;
       } else {
         eqLowBRef.current = eqLow; eqMidBRef.current = eqMid; eqHighBRef.current = eqHigh; biquadFilterBRef.current = filter;
-        stemLowPassBRef.current = stemLowPass; stemBandPassBRef.current = stemBandPass; stemHighPassBRef.current = stemHighPass;
-        stemLowGainBRef.current = stemLowGain; stemMidGainBRef.current = stemMidGain; stemHighGainBRef.current = stemHighGain;
+        stemLowBRef.current = stemLow; stemMidBRef.current = stemMid; stemHighBRef.current = stemHigh;
         volumeGainBRef.current = volumeGain; crossGainBRef.current = crossGain;
       }
     };
@@ -125,14 +112,12 @@ export function useAudioNodes() {
     setupDeck("A");
     setupDeck("B");
 
-    delayWet.connect(masterGain);
-    reverbWet.connect(masterGain);
     delayWet.connect(delayNode);
-    delayNode.connect(delayWet);
+    delayNode.connect(masterGain);
 
     const revDelay = ctx.createDelay(); revDelay.delayTime.value = 0.08;
     const revFb = ctx.createGain(); revFb.gain.value = 0.6;
-    reverbWet.connect(revDelay); revDelay.connect(revFb); revFb.connect(revDelay); revDelay.connect(reverbWet);
+    reverbWet.connect(revDelay); revDelay.connect(revFb); revFb.connect(revDelay); revDelay.connect(masterGain);
 
     return ctx;
   };
@@ -161,12 +146,12 @@ export function useAudioNodes() {
     nodes: {
       A: {
         eqLow: eqLowARef, eqMid: eqMidARef, eqHigh: eqHighARef, filter: biquadFilterARef,
-        stemLow: stemLowGainARef, stemMid: stemMidGainARef, stemHigh: stemHighGainARef,
+        stemLow: stemLowARef, stemMid: stemMidARef, stemHigh: stemHighARef,
         volume: volumeGainARef, cross: crossGainARef,
       },
       B: {
         eqLow: eqLowBRef, eqMid: eqMidBRef, eqHigh: eqHighBRef, filter: biquadFilterBRef,
-        stemLow: stemLowGainBRef, stemMid: stemMidGainBRef, stemHigh: stemHighGainBRef,
+        stemLow: stemLowBRef, stemMid: stemMidBRef, stemHigh: stemHighBRef,
         volume: volumeGainBRef, cross: crossGainBRef,
       },
       master: masterGainRef,

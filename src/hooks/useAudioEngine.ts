@@ -203,9 +203,12 @@ export function useAudioEngine() {
       const updated = { ...prev };
       updated.stems = { ...prev.stems, [stem]: volume };
 
-      if (stem === "drums" && dNodes.stemLow.current) dNodes.stemLow.current.gain.value = volume;
-      if (stem === "melody" && dNodes.stemMid.current) dNodes.stemMid.current.gain.value = volume;
-      if (stem === "vocals" && dNodes.stemHigh.current) dNodes.stemHigh.current.gain.value = volume;
+      // Convert linear 0-1 to dB (-40 to 0)
+      const db = volume <= 0.01 ? -40 : 20 * Math.log10(volume);
+
+      if (stem === "drums" && dNodes.stemLow.current) dNodes.stemLow.current.gain.value = db;
+      if (stem === "melody" && dNodes.stemMid.current) dNodes.stemMid.current.gain.value = db;
+      if (stem === "vocals" && dNodes.stemHigh.current) dNodes.stemHigh.current.gain.value = db;
 
       return updated;
     });
