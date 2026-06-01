@@ -789,11 +789,11 @@ function initAudio() {
   masterAnalyser = ctx.createAnalyser();
   masterAnalyser.fftSize = 256;
   masterLimiter = ctx.createDynamicsCompressor();
-  masterLimiter.threshold.value = -1.0;
-  masterLimiter.knee.value = 0.0;
-  masterLimiter.ratio.value = 20.0;
-  masterLimiter.attack.value = 0.005;
-  masterLimiter.release.value = 0.050;
+  masterLimiter.threshold.value = -0.5;
+  masterLimiter.knee.value = 12.0;
+  masterLimiter.ratio.value = 4.0;
+  masterLimiter.attack.value = 0.010;
+  masterLimiter.release.value = 0.250;
   
   masterGain.connect(masterLimiter);
   masterLimiter.connect(masterAnalyser);
@@ -2279,7 +2279,7 @@ function toggleBassBoost() {
   if (!ctx) initAudio();
   bassBoostActive = !bassBoostActive;
   if (bassBoostActive) {
-      if(masterBassBoost) masterBassBoost.gain.value = 15;
+      if(masterBassBoost) masterBassBoost.gain.value = 6;
       const b = document.getElementById("bassBoostBtn");
       if(b) { b.style.background = "#ff0055"; b.style.borderColor = "#ff0055"; }
   } else {
